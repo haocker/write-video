@@ -118,7 +118,7 @@ error / riser / glitch / sparkle / notification / typing / bassdrop / shutter
 
 ### 配乐（只渲染，不含模板）
 
-配乐**没有风格模板**——引擎只做渲染，编曲由你自己写。用 `wv.wa` 构造一份乐谱，赋给 `film.music`：
+配乐**没有风格模板**——引擎只做渲染，编曲由你（AI）自己写。用 `wv.wa` 构造一份乐谱，赋给 `film.music`：
 
 ```python
 score = wv.wa.Song(bpm=120, beats_per_bar=4, tail=0.5)
@@ -169,6 +169,43 @@ film.music = score
 - 引擎渲染结果经 `audio.py` 的 `render_score()` 解码为 48kHz 单声道，峰值归一到 0.85，再进混音链；配音期间配乐自动 -8dB 闪避（与音效一致）。
 - 也可不用引擎：`film.music = {"score": song, "gain": -3}`（乐谱 + 增益dB），或 `film.music = "res/bgm.mp3"`（现成音频循环铺满全片）。
 - 参考实现：`examples/hello-world/film.py` 的 `make_score()`（C 大调 I–V–vi–IV、pad/arp/bass 三声部、片尾落主和弦）。
+
+#### 换成 write-audio-pro（真实采样音源）
+
+默认模块 `runtime/write_video/write_audio/` 是**纯合成**（零依赖）。要钢琴/弦乐/管弦这类**真实采样**音色，
+整体换成 [write-audio-pro](https://github.com/haocker/write-audio-pro) 即可，**两步、不改代码**：
+
+```bash
+pip install numpy pretty_midi mido
+sudo apt install fluidsynth musescore-general-soundfont     # macOS: brew install fluid-synth
+
+cd runtime/write_video
+mv write_audio write_audio.simple                            # 备份原实现
+cp -r /path/to/write-audio-pro-skill/runtime/write_audio_pro/. write_audio/
+```
+
+目录名保持 `write_audio`（包内换成 pro 的实现），`wv.wa` 自动指向 pro；想切回：
+`rm -rf write_audio && mv write_audio.simple write_audio`。
+
+**乐谱要改的地方**：
+
+| 项 | 合成版（默认） | pro |
+|---|---|---|
+| 乐器名 | `pad` / `pluck` / `bass` / `bell` / `rhodes` / 打击类 | GM 真实乐器 `piano` / `strings` / `cello` …（见 pro 的 `GM` / `ENSEMBLES`） |
+| `note` 力度 | 0–1 | **0–127** |
+| 专有方法 | `grid` / `hit` / `hits` / `sidechain` | 无，用 `notes` + 声部编排代替 |
+| 额外能力 | — | `reverb` 混响、`pad_chord` 等 |
+
+```python
+score = wv.wa.Song(bpm=66)
+score.track("piano",   gain_db=0) .notes([(0, "A4", 2, 80), (2, "C5", 2, 80)])
+score.track("strings", gain_db=-6).notes([(0, "A3", 4, 70), (4, "F3", 4, 70)])
+score.length(bars=8)
+film.music = score                                           # film.music 接口不变
+```
+
+混音链、响度归一、配音闪避都不用动——`render_score()` 按 `Song.render(wav=...)` 读回音频，两个模块都兼容。
+（pro 渲染依赖 FluidSynth + SoundFont，首次渲染会先跑 MIDI，比纯合成慢。）
 
 ### 配音（edge-tts → `s.audio`）
 

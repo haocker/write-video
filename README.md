@@ -40,7 +40,7 @@ s = film.scene(0, 6)
 s.text("你好，世界", at=0.6, style="hero", enter="slam")        # 砸下 + 自动 impact
 s.text("一句代码，一支短片", at=1.6, style="subtitle", split="char")
 
-# 配乐：乐谱自己写，引擎只负责渲染
+# 配乐：乐谱自己写（AI 生成），引擎只负责渲染
 score = wv.wa.Song(bpm=120)
 score.track("pad",   gain_db=-16).notes([(0, "C4", 4.0, 0.5), (0, "E4", 4.0, 0.5), (0, "G4", 4.0, 0.5)])
 score.track("bass",  gain_db=-9).note(0, "C2", 3.6, 0.75)
@@ -55,11 +55,46 @@ film.render("artifacts/demo.mp4")
 
 ## 配乐
 
-渲染模块（`runtime/write_video/write_audio/`）**只做渲染**：曲式、和弦、旋律、配器、音量全部由乐谱显式写出，编曲完全由你自己写。
+默认渲染模块在 `runtime/write_video/write_audio/`，**只做渲染**：曲式、和弦、旋律、配器、音量全部由乐谱显式写出——
+乐谱自己写（AI 生成），引擎不编曲、不预设、不随机。
 乐谱用 `wv.wa` 构造：`Song` / `Track` / `note` / `notes` / `grid` / `hit` / `hits` / `sidechain` / `fade` / `length`；
 音高与和声工具在 `wv.wa.theory`（`midi` / `freq` / `chord` / `scale` / `SCALES`）。
-该模块可整体替换——换一套渲染实现，只需替换目录并调整 `__init__.py` 的导出。
 也可以直接给音频文件路径：`film.music = "res/bgm.mp3"`（循环铺满全片）。详见 `knowledge/compose.md`。
+
+### 想用真实采样音源？（换成 write-audio-pro）
+
+默认模块是纯合成（零依赖，装好 pillow/numpy 即可）。想要钢琴/弦乐/管弦这类**真实采样**音色，
+可把渲染模块整体换成 [write-audio-pro](https://github.com/haocker/write-audio-pro)。步骤：
+
+```bash
+# 1) 装依赖：pro 走 FluidSynth + SoundFont，另需 pretty_midi / mido
+pip install numpy pretty_midi mido
+sudo apt install fluidsynth musescore-general-soundfont   # macOS: brew install fluid-synth
+#  Win: 装 FluidSynth + 下载 FluidR3_GM.sf2 / MuseScore_General.sf3
+
+# 2) 用 pro 的运行时内容替换默认渲染模块（目录名保持 write_audio 不变）
+cd runtime/write_video
+mv write_audio write_audio.simple                                  # 先备份原实现
+cp -r /path/to/write-audio-pro-skill/runtime/write_audio_pro/. write_audio/
+```
+
+就这两步——目录名仍是 `write_audio`，包内是 pro 的实现，`wv.wa` 自动指向 pro，**无需改任何代码**。
+（想切回来：`rm -rf write_audio && mv write_audio.simple write_audio`。）
+
+影片脚本只要换掉乐谱写法即可（`film.music` 接口不变）：
+
+```python
+score = wv.wa.Song(bpm=66)                                  # 同样的 Song 入口
+score.track("piano",   gain_db=0) .notes([(0, "A4", 2, 80), (2, "C5", 2, 80)])
+score.track("strings", gain_db=-6).notes([(0, "A3", 4, 70), (4, "F3", 4, 70)])
+score.length(bars=8)
+film.music = score
+```
+
+**换 pro 时乐谱要改的地方**：乐器名用 GM 真实乐器（`piano` / `strings` / `cello` …，见 pro 的 `GM` / `ENSEMBLES`），
+不是合成版的 `pad` / `pluck` / `bass`；`note` 的力度是 **0–127**（不是 0–1）；`grid` / `hit` / `sidechain` 是合成版专有，
+pro 里用 `notes` + 声部编排代替。混音链、响度归一、配音闪避都不用动——
+`render_score()` 按 `Song.render(wav=...)` 读回音频，对两个模块都兼容。
 
 ## 配音
 
