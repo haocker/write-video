@@ -1,6 +1,13 @@
 # write-video
 
-> 用代码编排短视频 / MP4（code-to-video）：策划分镜 → 写 Python 影片脚本 → 渲染带配乐与音效的成片。
+> **这是一个 Skill（AI 技能包）。** 用代码编排短视频 / MP4（code-to-video）：策划分镜 → 写 Python 影片脚本 → 渲染带配乐与音效的成片。
+
+`write-video` 是一个给 AI 智能体（Claude Code / Codex 等支持 Skill 的工具）使用的**技能包**：
+智能体读 `SKILL.md` 与 `knowledge/` 下的指南，按流程策划、写脚本、渲染、自检，最终交付成片。
+它同时也是一个可独立调用的 **Python 库**（`import write_video`）——想手写脚本、或用它做自动化，都直接用 `runtime/` 即可。
+
+**装上就能做片**：把本仓库整个放进技能的 skills 目录（或设置 `WRITE_VIDEO_RUNTIME` 指向 `runtime/`），
+对 AI 说「做一支 20 秒的产品介绍短视频」，它会按技能走完策划 → 编排 → 渲染 → 自检的全流程。
 
 写一个 Python 脚本，声明场景与元素（文字、清单、数字、图片卡片、自绘、配音），
 合成配乐与音效，一次 `render` 生成带声 MP4 —— 无需剪辑软件、无需手工对轨。
@@ -133,11 +140,15 @@ python film.py
 
 ## 目录
 
-- `SKILL.md` — 技能包说明（给 AI 智能体）
-- `knowledge/planning.md` — 策划指南
-- `knowledge/compose.md` — 编排指南（API 速查 + 自绘菜单 + 常见坑）
-- `runtime/write_video/` — 运行时：`film.py` 模型 / `canvas.py` 画布 / `audio.py` 音效 + 配乐渲染 + 混音 / `write_audio/` 配乐渲染模块（可替换） / `voice.py` 配音 / `render.py` 管线 / `checks.py` 闪烁检测 / `fonts.py` 字体
+作为 Skill 的入口与结构：
+
+- `SKILL.md` — **技能入口**（给 AI 智能体读：能力、环境、两阶段流程、自检、知识路由）
+- `knowledge/planning.md` — 策划指南（阶段 1）
+- `knowledge/compose.md` — 编排指南（阶段 2，API 速查 + 自绘菜单 + 常见坑）
+- `runtime/write_video/` — 运行时库：`film.py` 模型 / `canvas.py` 画布 / `audio.py` 音效 + 配乐渲染 + 混音 / `write_audio/` 配乐渲染模块（可替换） / `voice.py` 配音 / `render.py` 管线 / `checks.py` 闪烁检测 / `fonts.py` 字体
 - `examples/hello-world/` — 示例片
+- `pyproject.toml` / `requirements.txt` — 作为 Python 库安装用
+- `LICENSE` — MIT
 
 ## 常见问题
 
