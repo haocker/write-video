@@ -1,0 +1,14 @@
+pillow>=8.0
+numpy>=1.16
+
+# 配音（可选，需联网）：
+#   pip install edge-tts
+#
+# 系统级依赖：FFmpeg（必需）——负责编码 MP4、混音、响度测量
+#   Linux : sudo apt install ffmpeg
+#   macOS : brew install ffmpeg
+#   Win   : winget install ffmpeg
+#   或用环境变量指定：WRITE_VIDEO_FFMPEG=/path/to/ffmpeg
+#
+# 中文字体（可选）——找不到时用环境变量指定字体文件：
+#   WRITE_VIDEO_FONT_SANS / _SANS_BOLD / _MONO
