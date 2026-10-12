@@ -241,6 +241,18 @@ s.text("那句代码", at=a.word("代码"))            # 精确到词（词时�
 `text(s,x,y,size=,color=,bold=,align=,valign=,alpha=,font=,line_gap=)`、`text_width(s,size,...)`、
 `image(path,x,y,w=,h=,alpha=,radius=)`、`glow(x,y,r,color=,alpha=)`。
 
+装饰级效果（常用于全片层 `film.draw` 为每帧加质感）：
+
+- `gradient(x, y, w, h, colors, direction="radial", alpha=1.0)` — 渐变填充。
+  `colors=[(位置0~1, 颜色名), ...]`；`direction` 取 `"radial"` / `"vertical"` / `"horizontal"`。
+  不传 x/y/w/h 则铺满全画布。
+- `vignette(radius=0.65, power=1.8, color=(0,0,0), alpha=0.55)` — 边缘暗角。
+  `radius` 暗角起始半径比例，`power` 衰减指数。
+- `grid(spacing=80, color="soft", alpha=0.05, width=1.0)` — 科技网格背景线。
+- `scanlines(spacing=3, alpha=0.08)` — 水平扫描线（复古 CRT 效果）。
+
+工具：`c.width/height`、`c.progress(a,b,"easeOutCubic")`、`c.rand(i)`（固定种子）、`c.spring(t)`、`c.decay(t)`、
+
 工具：`c.width/height`、`c.progress(a,b,"easeOutCubic")`、`c.rand(i)`（固定种子）、`c.spring(t)`、`c.decay(t)`、
 `c.wiggle(t,freq,amp,seed)`、`c.lerp`、`c.box(元素)`、`c.color(色,alpha)`、`c.ctx.time`（全局秒）。
 

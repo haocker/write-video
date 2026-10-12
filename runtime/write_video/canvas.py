@@ -418,6 +418,131 @@ class Canvas(object):
         spr = scale_sprite(glow_sprite(col, alpha), round(2 * r * self.ss))
         self.img.paste(spr, (self._ix(x - r), self._iy(y - r)), spr)
 
+    # ---------- 装饰级效果 ----------
+
+    def _gradient_stops(self, colors):
+        """colors: [(位置0~1, 颜色名)] → [(位置, (r,g,b))]"""
+        pal = self._palette()
+        stops = [(0.0, parse_color(colors[0][1], pal))]
+        for pos, c in colors:
+            stops.append((pos, parse_color(c, pal)))
+        if stops[-1][0] < 1.0:
+            stops.append((1.0, stops[-1][1]))
+        return stops
+
+    def _gradient_at(self, t, stops):
+        if t <= stops[0][0]:
+            return stops[0][1]
+        for i in range(1, len(stops)):
+            if t <= stops[i][0]:
+                lo, hi = stops[i - 1], stops[i]
+                span = hi[0] - lo[0]
+                u = (t - lo[0]) / span if span > 0 else 0.5
+                return tuple(int(round(lo[1][j] + (hi[1][j] - lo[1][j]) * u)) for j in range(3))
+        return stops[-1][1]
+
+    def gradient(self, x=0, y=0, w=None, h=None, colors=None, direction="radial", alpha=1.0):
+        """渐变填充矩形区域。
+        不传 x/y/w/h 则铺满全画布。
+        colors: [(位置0~1, 颜色名), ...]  如 [(0,"bg"), (0.5,"accent"), (1,"bg")]
+        direction: "radial" / "vertical" / "horizontal"
+        """
+        if w is None:
+            w = self.width
+        if h is None:
+            h = self.height
+        if colors is None:
+            colors = [(0.0, "bg"), (1.0, "accent")]
+        w_px = max(1, int(round(w * self.ss)))
+        h_px = max(1, int(round(h * self.ss)))
+        stops = self._gradient_stops(colors)
+        alp_frac = clamp(alpha, 0.0, 1.0)
+
+        if direction == "radial":
+            cx, cy = w_px / 2.0, h_px / 2.0
+            max_r = math.hypot(cx, cy)
+            yy, xx = np.mgrid[0:h_px, 0:w_px]
+            dist = np.sqrt((xx - cx) ** 2 + (yy - cy) ** 2) / max_r
+            arr = np.zeros((h_px, w_px, 4), dtype=np.uint8)
+            for i in range(3):
+                arr[:, :, i] = np.uint8(self._gradient_at(0.0, stops)[i])
+            for si in range(1, len(stops)):
+                lo, hi = stops[si - 1], stops[si]
+                mask = (dist >= lo[0]) & (dist < hi[0])
+                span = hi[0] - lo[0]
+                u = ((dist - lo[0]) / span) if span > 0 else 0.5
+                for c in range(3):
+                    lo_v, hi_v = lo[1][c], hi[1][c]
+                    arr[:, :, c] = np.where(mask,
+                                             np.uint8(lo_v + (hi_v - lo_v) * u), arr[:, :, c])
+            arr[:, :, 3] = np.uint8(255 * alp_frac)
+        else:
+            if direction == "vertical":
+                t = np.linspace(0, 1, h_px).reshape(-1, 1)
+            else:
+                t = np.linspace(0, 1, w_px).reshape(1, -1)
+            arr = np.zeros((h_px, w_px, 4), dtype=np.uint8)
+            for si in range(1, len(stops)):
+                lo, hi = stops[si - 1], stops[si]
+                span = hi[0] - lo[0]
+                u = ((t - lo[0]) / span) if span > 0 else 0.5
+                mask = (t >= lo[0]) & (t < hi[0])
+                for c in range(3):
+                    lo_v, hi_v = lo[1][c], hi[1][c]
+                    arr[:, :, c] = np.where(mask,
+                                             np.uint8(lo_v + (hi_v - lo_v) * u), arr[:, :, c])
+            arr[:, :, 3] = np.uint8(255 * alp_frac)
+
+        grad = Image.fromarray(arr, "RGBA")
+        self.img.paste(grad, (self._ix(x), self._iy(y)), grad)
+
+    def vignette(self, radius=0.65, power=1.8, color=(0, 0, 0), alpha=0.55):
+        """边缘暗角。radius 暗角起始半径比例，power 衰减指数。"""
+        w_px = int(round(self.width * self.ss))
+        h_px = int(round(self.height * self.ss))
+        cx, cy = w_px / 2.0, h_px / 2.0
+        max_r = math.hypot(cx, cy)
+        yy, xx = np.mgrid[0:h_px, 0:w_px]
+        d = np.sqrt((xx - cx) ** 2 + (yy - cy) ** 2) / max_r
+        t = np.clip((d - radius) / (1.0 - radius), 0, 1)
+        t = np.power(t, power)
+        a = np.uint8(t * 255 * clamp(alpha, 0, 1))
+        c = tuple(int(clamp(v, 0, 255)) for v in color)
+        arr = np.dstack([np.full((h_px, w_px), c[0], dtype=np.uint8),
+                         np.full((h_px, w_px), c[1], dtype=np.uint8),
+                         np.full((h_px, w_px), c[2], dtype=np.uint8),
+                         a])
+        vit = Image.fromarray(arr, "RGBA")
+        self.img.paste(vit, (0, 0), vit)
+
+    def grid(self, spacing=80, color="soft", alpha=0.05, width=1.0):
+        """科技网格背景线。"""
+        w_px = int(round(self.width * self.ss))
+        h_px = int(round(self.height * self.ss))
+        sp = max(4, int(round(spacing * self.ss)))
+        col = self._fill(color, alpha)
+        if col is None:
+            return
+        ov = Image.new("RGBA", (w_px, h_px), (0, 0, 0, 0))
+        d = ImageDraw.Draw(ov)
+        for x in range(0, w_px, sp):
+            d.line([(x, 0), (x, h_px)], fill=col, width=max(1, int(round(width * self.ss))))
+        for y in range(0, h_px, sp):
+            d.line([(0, y), (w_px, y)], fill=col, width=max(1, int(round(width * self.ss))))
+        self.img.paste(ov, (0, 0), ov)
+
+    def scanlines(self, spacing=3, alpha=0.08):
+        """水平扫描线。"""
+        w_px = int(round(self.width * self.ss))
+        h_px = int(round(self.height * self.ss))
+        sp = max(1, int(round(spacing * self.ss)))
+        col = (0, 0, 0, int(255 * clamp(alpha, 0, 1)))
+        ov = Image.new("RGBA", (w_px, h_px), (0, 0, 0, 0))
+        d = ImageDraw.Draw(ov)
+        for y in range(0, h_px, sp * 2):
+            d.rectangle([(0, y), (w_px - 1, y + sp - 1)], fill=col)
+        self.img.paste(ov, (0, 0), ov)
+
     # ---------- 工具 ----------
     def progress(self, a, b, ease_name="linear"):
         t = getattr(self.ctx, "t", 0.0) if self.ctx is not None else 0.0
