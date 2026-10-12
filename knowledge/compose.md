@@ -61,7 +61,7 @@ if __name__ == "__main__":
 
 | 方法 | 要点 |
 |---|---|
-| `s.text(文字, at=, style=, enter=, size=, color=, bold=, font=, x=, y=, pos=, split=, stagger=, line_gap=, align=)` | `**强调**` → 强调色；`\n` 分行；`font="mono"` 等宽；超宽自动缩小（记 info） |
+| `s.text(文字, at=, style=, enter=, size=, color=, bold=, font=, x=, y=, pos=, split=, stagger=, line_gap=, align=)` | `**强调**` → 强调色；`\n` 分行；`font="mono"` 等宽；超宽自动缩小（记 info）。注意：等宽字体不含中文，代码块中的中文必须用 `font="sans"` 单独显示（见常见坑 #12） |
 | `s.text(…)` 的 `split` 取 `"char"/"word"/"line"`：逐字/逐词/逐行入场（word：拉丁按词、中文按字、标点并入前一词；空格占据节拍） |
 | `s.list(条目数组, at=, icon=, stagger=, size=, gap=)` | 逐条滑入；icon：check / circle-check / star / rocket / arrow / dot / warn / heart / plus / cross / spark |
 | `s.counter(从, 到, at=, dur=1.0, format="%d", size=, pos=)` | 滚动 + 自动滴答与叮；`.done` 是结束秒 |
@@ -377,12 +377,13 @@ def shot(c, t):
 3. `slam` 不要放在场景第 0 秒（要 0.3 秒起跳）。
 4. 自绘别手画大渐变/多层大圆——用 `c.glow`（自带缓存）；大范围图元越多越慢。
 5. 突然出现/消失的元素会触发闪烁检测——用 `enter` 或 alpha 渐入渐出。
-6. 中文缺字/方块：用 `WV_FONT_SANS` 指定字体文件。
+6. 中文缺字/方块：用 `WV_FONT_SANS` 指定字体文件（见常见坑 #12 关于 `font="mono"` 的特例）。
 7. `typing`、清单、slam 这类音效已自动生成，不用手写；自定义用 `sfx=[...]`。
 8. 想彻底无缝的连续镜头：把绘制挂在**全片层** `film.draw(fn, at=0)`（场景内的整屏自绘会在场景结束时被淡出）。
 9. 渲染前先 `film.lint()`；有 error（找不到图片/未知音效）会拒绝渲染。
 10. 单帧 PNG 已做加速；整片速度看报告的 `timings.frames`。
 11. 配音 mp3 手工替换后要删掉同名 `.json` 缓存（否则词时间还是旧的）；`wv.voice.tts()` 换参数时会自动重合成。
+12. **`font="mono"` 不含中文**：系统自带的等宽字体（DejaVu Sans Mono / Consolas / Menlo）均为纯拉丁字体，代码块里的中文注释、字符串会显示为豆腐块。做法：把中文从代码行拆出来，用 `font="sans"` 单独显示；或设环境变量 `WV_FONT_MONO` 指向含中文的等宽字体（如 Noto Sans Mono CJK）。
 
 ## 性能（本机参考）
 
