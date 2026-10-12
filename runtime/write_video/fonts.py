@@ -93,7 +93,8 @@ _ENV = {
 
 _FONT_EXT = (".ttf", ".ttc", ".otf")
 
-_INDEXED = {"mono", "mono_bold"}
+# 所有类别都优先选含中文的字体（用于中文影片场景）
+_NEEDS_CJK = {"sans", "sans_bold", "mono", "mono_bold"}
 
 
 def _is_font_path(v):
@@ -118,38 +119,33 @@ def _supports_cjk_path(path_idx):
 
 
 def _needs_cjk(kind):
-    return kind in ("mono", "mono_bold")
+    return kind in _NEEDS_CJK
 
 
 @lru_cache(maxsize=32)
 def find(kind="sans"):
     """返回 (文件路径, TTC face_index)。kind: sans / sans_bold / mono / mono_bold"""
-    # 1) 环境变量指定
+    candidates = _CANDIDATES.get(kind, [])
+
+    # 1) 环境变量（跳过 CJK 检测，用户显式指定的优先级最高）
     env = os.environ.get(_ENV.get(kind, ""), "")
     if env and os.path.exists(env):
         return (env, 0)
 
-    # 2) 遍历候选
-    if kind in _INDEXED:
-        # 等宽：优先选明确声明了 index 的候选，确保 CJK + 等宽
-        for c in _CANDIDATES.get(kind, []):
-            if isinstance(c, (list, tuple)):
-                path, idx = c[0], c[1] if len(c) > 1 else 0
-                if os.path.exists(path):
-                    if not _needs_cjk(kind) or _supports_cjk(path):
-                        return (path, idx)
-        # 等宽未找到 CJK 候选时的降级：选任意存在的（含 Latin-only）
-        for c in _CANDIDATES.get(kind, []):
-            path, idx = _resolve(c)
-            if os.path.exists(path):
-                return (path, idx)
-    else:
-        for c in _CANDIDATES.get(kind, []):
-            path, idx = _resolve(c)
-            if os.path.exists(path):
+    # 2) 优先 CJK 候选
+    for c in candidates:
+        path, idx = _resolve(c)
+        if os.path.exists(path):
+            if not _needs_cjk(kind) or _supports_cjk(path):
                 return (path, idx)
 
-    # 3) 降级：mono 系列回退到 sans
+    # 3) 降级：选任意存在的
+    for c in candidates:
+        path, idx = _resolve(c)
+        if os.path.exists(path):
+            return (path, idx)
+
+    # 4) 跨类别降级：粗体/等宽回退到 sans
     if kind in ("sans_bold", "mono_bold", "mono"):
         fallback = find("sans")
         if fallback:
