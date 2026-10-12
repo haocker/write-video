@@ -26,6 +26,34 @@
 
 ## 安装
 
+### 方式一：把仓库地址发给 AI（推荐）
+
+不用手动装——**把仓库地址发给支持 Skill 的 agent**（Claude Code / Codex 等），它自己就装好了：
+
+```
+https://github.com/haocker/write-video
+
+把这个 skill 装上，然后帮我做一支 20 秒的产品介绍短视频。
+```
+
+agent 会自己读取 `SKILL.md` 与 `knowledge/` 指南，走完策划 → 编排 → 渲染 → 自检的全流程。
+
+想手动装的话，把整个仓库放进 skills 目录即可：
+
+```bash
+git clone https://github.com/haocker/write-video.git ~/.codebuddy/skills/write-video
+```
+
+（不同工具的 skills 目录可能不同，按你所用的 agent 为准；跑脚本时它会自动把 `runtime/` 加进 `sys.path`。）
+
+### 方式二：作为 Python 库
+
+```bash
+pip install git+https://github.com/haocker/write-video.git
+```
+
+或克隆后把 `runtime/` 加进 `PYTHONPATH`。运行依赖：
+
 1. Python 3.8+（含 pip）
 2. 依赖：`pip install pillow numpy`
    - 要生成配音再加 `pip install edge-tts`（可选；配音也支持任何现成音频文件）
