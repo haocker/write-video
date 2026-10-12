@@ -39,8 +39,20 @@ def _supports_cjk(path):
 
 # 候选字体表：字符串为路径（index=0），元组为 (路径, TTC_face_index)
 # 仅收录开源无版权可商用字体。
+
+# 捆绑字体目录（相对于 fonts.py 的 ../../../fonts）
+_HERE = os.path.dirname(os.path.abspath(__file__))
+_BUNDLED = os.path.normpath(os.path.join(_HERE, "..", "..", "fonts"))
+
+
+def _bundled(name):
+    return os.path.join(_BUNDLED, name)
+
+
 _CANDIDATES = {
     "sans": [
+        _bundled("LXGWWenKai-Regular.ttf"),
+        _bundled("Inter-Regular.ttf"),
         "/usr/share/fonts/truetype/wqy/wqy-microhei.ttc",
         "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc",
         "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
@@ -48,19 +60,23 @@ _CANDIDATES = {
         "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
     ],
     "sans_bold": [
+        _bundled("Inter-Bold.ttf"),
         "/usr/share/fonts/truetype/wqy/wqy-microhei.ttc",
         "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc",
         "/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc",
         "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
     ],
     "mono": [
-        "/usr/share/fonts/truetype/wqy/wqy-microhei.ttc",  # face idx 0 proportional，fallback 改 index 1
+        (_bundled("SarasaMonoSC-Regular.ttf"), 0),
+        (_bundled("JetBrainsMono-Regular.ttf"), 0),
+        "/usr/share/fonts/truetype/wqy/wqy-microhei.ttc",
         ("/usr/share/fonts/truetype/wqy/wqy-microhei.ttc", 1),  # WenQuanYi Micro Hei Mono (CJK 等宽)
         "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc",
         "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf",
         "/usr/share/fonts/opentype/noto/NotoSansMono-Regular.ttf",
     ],
     "mono_bold": [
+        (_bundled("JetBrainsMono-Bold.ttf"), 0),
         ("/usr/share/fonts/truetype/wqy/wqy-microhei.ttc", 1),
         "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc",
         "/usr/share/fonts/truetype/dejavu/DejaVuSansMono-Bold.ttf",
