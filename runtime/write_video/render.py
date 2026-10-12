@@ -27,11 +27,6 @@ def find_ffmpeg():
         la = os.environ.get("LOCALAPPDATA", "")
         cands.append(os.path.join(la, "Microsoft", "WinGet", "Links", "ffmpeg.exe"))
         cands.append(r"C:\ffmpeg\bin\ffmpeg.exe")
-        try:
-            import glob
-            cands += glob.glob(os.path.join(la, "aardio", "ffmpeg-static", "**", "ffmpeg.exe"), recursive=True)
-        except Exception:
-            pass
     else:
         cands += ["/usr/local/bin/ffmpeg", "/opt/homebrew/bin/ffmpeg", "/usr/bin/ffmpeg"]
     for c in cands:

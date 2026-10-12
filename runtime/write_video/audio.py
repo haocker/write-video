@@ -2,7 +2,7 @@
 """write-video — 声音：音效合成、配乐渲染、混音与响度归一。
 
 - 音效：numpy 现场合成（19 种，48kHz 单声道），不依赖音频素材；
-- 配乐：write-audio 引擎渲染（源码副本内置于 `write_audio/`）——引擎只做渲染，
+- 配乐：由可替换的渲染模块（`write_audio/`）渲染——该模块只做渲染，
   曲式/和弦/旋律/配器/音量全部由影片脚本显式写出，无风格模板、无随机预设；
 - 混音 / 闪避 / 响度：本模块，把三条来源（配乐、配音、音效）合成一条 48kHz 单声道。
 """
@@ -298,16 +298,16 @@ def synth_sfx(name, gain=0.0, dur=None, pitch=0.0, seed=1):
     return (x * (10.0 ** (float(gain) / 20.0))).astype(np.float32)
 
 
-# ================================================================ 配乐（write-audio 引擎）
-# 配乐引擎为 write-audio（以源码副本内置于 runtime/write_video/write_audio/）。
-# 引擎只做渲染：曲式、和弦、旋律、配器、音量全部由乐谱显式给出，没有风格模板、没有随机预设。
+# ================================================================ 配乐（只渲染，不含模板）
+# 配乐渲染由可替换的模块负责（当前实现以源码形式放在 runtime/write_video/write_audio/）。
+# 该模块只做渲染：曲式、和弦、旋律、配器、音量全部由乐谱显式给出，没有风格模板、没有随机预设。
 # 乐谱由影片脚本（film.py）用 wa.Song / wa.Track 直接写，见 knowledge/compose.md。
 
 
 def render_score(score, duration, gain_db=0.0, lufs=-14.0):
-    """渲染一份 write-audio 乐谱，返回 float32 单声道数组（48kHz，长度 >= duration）。
+    """渲染一份乐谱，返回 float32 单声道数组（48kHz，长度 >= duration）。
 
-    score   write-audio 的 Song 对象（由调用方显式写好音符）
+    score   Song 对象（由调用方显式写好音符）
     其余参数：整轨额外增益（dB）与响度目标。
 
     只做"渲染 → 读回 → 补齐/截断到片长"这件事，不做任何编曲决策。
@@ -315,7 +315,7 @@ def render_score(score, duration, gain_db=0.0, lufs=-14.0):
     import tempfile
     from . import write_audio as wa
     if not isinstance(score, wa.Song):
-        raise TypeError("render_score 需要 write-audio 的 Song 对象，收到 %r" % (type(score),))
+        raise TypeError("render_score 需要 Song 对象，收到 %r" % (type(score),))
     if not score.tracks:
         raise ValueError("乐谱里没有任何声部（用 song.track(...) 添加）")
 
@@ -512,7 +512,7 @@ def mix_tracks(film):
     m = film.music
     if m:
         # 配乐来源二选一：
-        #   ① write-audio 乐谱（wa.Song 对象）—— 乐谱由影片脚本自己写；
+        #   ① 乐谱（wa.Song 对象）—— 乐谱由影片脚本自己写；
         #   ② 现成音频文件路径（循环铺满全片）。
         gain = 0.0
         if isinstance(m, dict):

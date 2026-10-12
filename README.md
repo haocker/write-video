@@ -6,11 +6,10 @@
 合成配乐与音效，渲染出带声 MP4，并自动做 lint、单帧闪烁检测与响度检查。
 
 - **画面是时间的纯函数**：任意帧可单独渲染；同样的脚本、素材与种子得到相同画面。
-- **配乐由 [write-audio](https://github.com/haocker/write-audio) 引擎渲染**：引擎只负责渲染，曲式/和弦/旋律/配器全部由乐谱显式写出，**没有风格模板、没有随机预设**。
+- **配乐引擎只负责渲染**：曲式/和弦/旋律/配器全部由乐谱显式写出，**没有风格模板、没有随机预设**；乐谱用 `cf.wa` 在脚本里直接写。
 - **自动检查**：lint、单帧闪烁检测（源帧 + 成片回读）、混音响度与真峰值。
 
-本目录是 aardio「织影 / autos.skills.codingFilm」的通用移植版：不依赖 aardio，只需要 **Python 3.8+** 与 **FFmpeg**。
-配乐引擎为 [write-audio](https://github.com/haocker/write-audio)（源码副本已内置，纯 Python + numpy）。
+只需要 **Python 3.8+** 与 **FFmpeg**，纯 Python 实现、零外部素材。
 
 ## 安装
 
@@ -38,7 +37,7 @@ s = film.scene(0, 6)
 s.text("你好，世界", at=0.6, style="hero", enter="slam")
 s.text("一句代码，一支短片", at=1.6, style="subtitle", split="char")
 
-# 配乐：用 write-audio 的乐谱 API 自己写（引擎只渲染，无风格模板）
+# 配乐：乐谱自己写，引擎只负责渲染（无风格模板）
 score = cf.wa.Song(bpm=120)
 score.track("pad",  gain_db=-16).notes([(0, "C4", 4.0, 0.5), (0, "E4", 4.0, 0.5), (0, "G4", 4.0, 0.5)])
 score.track("bass", gain_db=-9).note(0, "C2", 3.6, 0.75)
@@ -52,9 +51,10 @@ film.render("artifacts/demo.mp4")
 运行 `python film.py`，产物在 `artifacts/`：
 MP4 + 联系表（`*.sheet.png`）+ 报告（`*.report.txt`，含 lint / 闪烁 / 响度）。
 
-配乐由 [write-audio](https://github.com/haocker/write-audio) 引擎渲染（源码副本已内置于 `runtime/write_video/write_audio/`，纯 Python + numpy，无需额外安装）。
-**引擎只负责渲染**：曲式、和弦、旋律、配器、音量全部由乐谱显式写出——没有内置风格模板、也没有随机预设，编曲由 AI 自己写。
-乐谱用 `cf.wa`（即内置的 `write_audio` 包）构造：`Song` / `Track` / `note` / `notes` / `grid` / `hit` / `hits` / `sidechain` / `fade` / `length`；音高与和声工具在 `cf.wa.theory`（`midi` / `freq` / `chord` / `scale` / `SCALES`）。
+配乐由运行时内置的渲染模块（`runtime/write_video/write_audio/`）负责，**它只负责渲染**：
+曲式、和弦、旋律、配器、音量全部由乐谱显式写出——没有内置风格模板、也没有随机预设，编曲完全由你自己写。
+乐谱用 `cf.wa` 构造：`Song` / `Track` / `note` / `notes` / `grid` / `hit` / `hits` / `sidechain` / `fade` / `length`；音高与和声工具在 `cf.wa.theory`（`midi` / `freq` / `chord` / `scale` / `SCALES`）。
+该模块是可替换的：换一套渲染实现，只需替换 `runtime/write_video/write_audio/` 并调整 `__init__.py` 的导出。
 也可直接给音频文件路径：`film.music = "res/bgm.mp3"`（循环铺满全片）。详见 `knowledge/compose.md`。
 
 配音（edge-tts，需联网）：
@@ -88,13 +88,13 @@ python film.py
 - `SKILL.md` — 技能包说明（给 AI 智能体）
 - `knowledge/planning.md` — 策划指南
 - `knowledge/compose.md` — 编排指南（API 速查 + 自绘菜单 + 常见坑）
-- `runtime/write_video/` — 运行时：`film.py` 模型 / `canvas.py` 画布 / `audio.py` 音效 + 配乐渲染 + 混音 / `write_audio/` [write-audio](https://github.com/haocker/write-audio) 引擎源码副本 / `voice.py` 配音（edge-tts）/ `render.py` 管线 / `checks.py` 闪烁检测 / `fonts.py` 字体
+- `runtime/write_video/` — 运行时：`film.py` 模型 / `canvas.py` 画布 / `audio.py` 音效 + 配乐渲染 + 混音 / `write_audio/` 配乐渲染模块（可替换） / `voice.py` 配音（edge-tts）/ `render.py` 管线 / `checks.py` 闪烁检测 / `fonts.py` 字体
 - `examples/hello-world/` — 示例片
 
 ## 常见问题
 
 - **找不到 ffmpeg**：安装或 `WV_FFMPEG` 指定；首次渲染会自动探测可用编码器（结果缓存在临时目录）。
-- **配乐报错**：`film.music` 只接受 write-audio 的 `Song` 对象或音频文件路径；报 `render_score 需要 write-audio 的 Song 对象` 说明赋错了类型（正确写法 `film.music = cf.wa.Song(...)`）。
+- **配乐报错**：`film.music` 只接受乐谱 `Song` 对象或音频文件路径；报 `render_score 需要 … Song 对象` 说明赋错了类型（正确写法 `film.music = cf.wa.Song(...)`）。
 - **找不到可用字体**：安装中文字体或用 `WV_FONT_SANS` 指定。
 - **渲染很慢**：先用 `draft=True`（半分辨率）迭代；正式渲染 1080p 约 40~100ms/帧（看内容）。
 - **中文输出乱码**：Windows 终端执行 `chcp 65001`；或设 `PYTHONUTF8=1`。
@@ -102,7 +102,6 @@ python film.py
 ## 尚未支持（路线图）
 
 clip 序列帧与视频取帧、code/chat 专用元素、方框自绘的卡片词、`burst` 的 `behind` 参数。
-这些在 aardio 版可用，通用版会逐步补齐。
 
 已补齐（相对初版）：配音与外部音频 `s.audio`（含配乐自动闪避、逐词对齐、edge-tts 助手）、
 image 卡片（忠实的窗口框 `title` / 说明 `caption` / 投影 `shadow` / 卡内推近 `zoom`）、

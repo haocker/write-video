@@ -8,7 +8,7 @@
     s = film.scene(0, 4)
     s.text("你好，世界", at=0.6, style="hero", enter="slam")
 
-    # 配乐：用内置的 write-audio 引擎自己写乐谱（引擎只做渲染，无风格模板）
+    # 配乐：用内置的渲染模块自己写乐谱（引擎只做渲染，无风格模板）
     score = cf.wa.Song(bpm=120)
     score.track("pad").notes([(0, "A3", 4, 0.5)])
     score.length(beats=8)

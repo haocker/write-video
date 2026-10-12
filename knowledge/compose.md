@@ -116,9 +116,9 @@ error / riser / glitch / sparkle / notification / typing / bassdrop / shutter
 - `gain` 单位 dB（-6 = 轻一半）；`dur` 覆盖时长；`pitch` 半音数。
 - 对齐手法：命中前放 `riser`（dur = 到命中的间隔），命中点放 `impact`；`at` 就是那个命中的数。
 
-### 配乐（write-audio 引擎）
+### 配乐（只渲染，不含模板）
 
-配乐**没有风格模板**——引擎只做渲染，编曲由你自己写。用 `cf.wa`（内置的 write-audio 包）构造一份乐谱，赋给 `film.music`：
+配乐**没有风格模板**——引擎只做渲染，编曲由你自己写。用 `cf.wa` 构造一份乐谱，赋给 `film.music`：
 
 ```python
 score = cf.wa.Song(bpm=120, beats_per_bar=4, tail=0.5)
@@ -180,7 +180,7 @@ import write_video as cf
 v1 = cf.voice.tts("只用一句话，能做视频吗？", "/res/voice/q1.mp3")   # 晓晓（默认女声）
 q = s.audio(v1, at=0.8)                        # v1 直接传：path/text/words 全带上
 s.text(v1["text"], at=q.at, style="subtitle")  # 台词长在画面里（不做字幕条）
-s.text("织影", at=q.done + 0.5, style="hero", enter="slam")
+s.text("品牌名", at=q.done + 0.5, style="hero", enter="slam")
 
 v2 = cf.voice.tts("能。一句代码，一支短片。", "/res/voice/a1.mp3", voice="云希", rate=5)
 a = s.audio(v2, at=q.done + 0.4)
@@ -262,7 +262,7 @@ def shot(c, t):
 ```python
 # ⑤ 逐字显露：用文字切片（能画多少就画多少），淡字垫底保证骨架可读
 def shot(c, t):
-    label = "织影"
+    label = "画面"
     c.text(label, 960, 540, 220, "accent", alpha=0.14)   # 淡字垫底
     n = int(len(label) * c.progress(0.2, 1.2, "easeInOutCubic"))
     c.text(label[:n], 960, 540, 220, "accent")

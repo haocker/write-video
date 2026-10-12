@@ -8,7 +8,7 @@
     v = cf.voice.tts("只用一句话，能做视频吗？", "/res/voice/q1.mp3")
     q = s.audio(v, at=0.8)        # v = {path; text; words; ...}，直接传给 audio
     s.text(v["text"], at=q.at)      # 台词长在画面里
-    s.text("织影", at=q.done + 0.5, style="hero", enter="slam")
+    s.text("品牌名", at=q.done + 0.5, style="hero", enter="slam")
 
 - 词时间：合成时顺便拿到逐词时间（v["words"]，相对文件开头的秒数），
   `word()` 靠它精确到词：`s.text("那句", at=q.word("一句"))`。

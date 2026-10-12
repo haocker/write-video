@@ -10,11 +10,11 @@ description: 用代码编排短视频/MP4（Coding Film / code-to-video）：策
 
 - **画面是时间的纯函数**：任意帧可单独渲染；同样的脚本、素材与种子得到相同画面。
 - **音效跟着画面命中点**：入场预设自带音效；特殊事件用一张时刻表让画面与声音共用。
-- **配乐由 write-audio 引擎渲染**：引擎只做渲染——曲式、和弦、旋律、配器、音量全部由**乐谱显式写出**，没有风格模板、没有随机预设。乐谱用 `cf.wa`（`Song`/`Track`）在脚本里直接写，赋给 `film.music` 即可；例如 `s = cf.wa.Song(bpm=120); s.track("pad").notes([...]); film.music = s`。
+- **配乐引擎只做渲染**：曲式、和弦、旋律、配器、音量全部由**乐谱显式写出**，没有风格模板、没有随机预设。乐谱用 `cf.wa`（`Song`/`Track`）在脚本里直接写，赋给 `film.music` 即可；例如 `s = cf.wa.Song(bpm=120); s.track("pad").notes([...]); film.music = s`。
 - **配音有两条通道**：`cf.voice.tts()`（edge-tts，默认晓晓/云希等中文音色，带逐词时间）或任何现成音频文件；`s.audio` 摆放时自动去首尾静音、响度对齐、说话时配乐自动闪避。
 - **自动检查**：lint（越界/阅读时间/选项拼写…）、单帧闪烁检测（源帧 + 成片回读）、混音响度与真峰值。
 
-这是 aardio「织影」技能的通用移植：不依赖 aardio，只需要 Python 3.8+ 与 FFmpeg。
+只需要 Python 3.8+ 与 FFmpeg。
 
 ## 环境
 
@@ -54,6 +54,6 @@ description: 用代码编排短视频/MP4（Coding Film / code-to-video）：策
 - `knowledge/` — 策划与编排指南（先读这两个）
 - `runtime/write_video/` — 运行时（纯 Python，可读源码学手艺）
   - `audio.py` — 音效合成 / 配音 / 混音 / 响度 / **配乐渲染**（`render_score`，纯渲染不含模板）
-  - `write_audio/` — [write-audio](https://github.com/haocker/write-audio) 引擎源码副本（乐谱 API：`Song`/`Track`/`theory`）
+  - `write_audio/` — 配乐渲染模块（可替换；乐谱 API：`Song`/`Track`/`theory`）
 - `examples/hello-world/` — 示例片（20 秒，含招牌星海自绘）
 - `SKILL.md` / `README.md` — 本文件与安装说明

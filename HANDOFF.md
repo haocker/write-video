@@ -4,26 +4,27 @@
 
 ## 状态
 
-- 阶段：**v0.4.0（更名为 write-video / write_video；配乐为 write-audio 纯渲染引擎）**。
+- 阶段：**v0.4.0（更名为 write-video / write_video；配乐改为纯渲染，去掉全部风格模板）**。
   - **v0.4.0（本次）**：项目由 `codingfilm` 更名为 **`write-video`**（Python 包 `codingfilm` → `write_video`，
     运行时目录 `runtime/codingfilm/` → `runtime/write_video/`，脚本 `import codingfilm as cf` → `import write_video as cf`）。
     环境变量统一前缀：`CODINGFILM_RUNTIME`→`WRITE_VIDEO_RUNTIME`、`CF_FFMPEG`→`WV_FFMPEG`、
     `CF_FONT_*`→`WV_FONT_*`；临时文件前缀改 `write_video_*`；控制台标签改 `[write-video]`。
     重命名后示例片重渲结果与原版**完全一致**（0 闪烁 / lint 0-0-0 / -16.0 LUFS / TP -2.2 dB）。
-  - **v1.3**：配乐从"audio.py 内 numpy 现场合成 + 内置风格模板"改为 **write-audio 引擎渲染**，
+  - **v1.3**：配乐从"audio.py 内 numpy 现场合成 + 内置风格模板"改为**可替换的渲染模块**，
     并**抛弃全部内置风格模板**（tech/upbeat/ambient/lofi 及 `build_music` 的自动编曲逻辑全部删除）——
-    引擎只负责渲染，曲式/和弦/旋律/配器/音量全部由 AI 在影片脚本里用乐谱显式写出（无随机预设）。
+    渲染模块只负责渲染，曲式/和弦/旋律/配器/音量全部由 AI 在影片脚本里用乐谱显式写出（无随机预设）。
     `audio.py` 删除原合成器实现（约 360 行：`_i_*` 音型、`build_music` 骨架、音阶/音名工具），
     改为导出 `render_score(score, duration, gain_db=, lufs=)` 纯渲染函数 + `_read_wav_mono()` 解码助手；
     `mix_tracks()` 的配乐分支改为：`film.music` 是 `write_audio.Song` → `render_score()`，
-    是文件路径 → 解码循环铺满。write-audio 引擎以**源码副本**内置在 `runtime/write_video/write_audio/`。
+    是文件路径 → 解码循环铺满。当前渲染实现以源码放在 `runtime/write_video/write_audio/`，**可整体替换**
+    （换实现只需替换该目录 + 调整 `write_video/__init__.py` 的导出）。
     `write_video/__init__.py` 导出 `write_audio` 与别名 `wa`（脚本里写 `cf.wa.Song(...)`）。
   - **零回归项**：音效合成（19 种）、配音（edge-tts / 外部音频）、配乐闪避、混音、响度归一全部未动。
   - 验证：示例片《Hello, World!》20s 重渲（乐谱：C 大调 I–V–vi–IV，pad/arp/bass 三声部）——
     **0 闪烁 / lint 0-0-0 / -16.0 LUFS / 真峰值 -2.2 dBTP**；`render_score` 单独验证峰值 0.850、无 nan/inf。
   - v1.1 新增**自定义配乐**（调性/音阶/和弦进行/音型/主旋律）；
   - v1.2 新增第一批**内容通道**：`s.audio` 外部音频/配音（配乐自动闪避 + 逐词对齐 + `cf.voice.tts()` edge-tts 助手）、image 卡片（`title` 窗口框 / `caption` 说明 / `shadow` 投影 / `zoom` 卡内推近）、自动 Ken Burns、`split="word"` 逐词入场。
-- 位置：`C:\Users\10086\AppData\Local\aardio\autos\workspace\skills\write-video\`
+- 位置：`./`（仓库根目录）
 - 验证记录：
   - 示例片《Hello, World!》20s / 1920x1080 / 30fps：渲染 61.5s，**0 闪烁事件、lint 0/0/0、-16.0 LUFS / -2.9 dBTP**；
   - 成片回读扫描（`checks.scan_video`）0 事件；编码质量（qsv q21）与源帧 mean-abs-diff = 1.48/255；
@@ -40,7 +41,7 @@
 
 ## 结构
 
-- `runtime/write_video/`：`film.py`（模型/预设/排版/lint）· `canvas.py`（画布/缓动/颜色）· `audio.py`（音效/配乐渲染/响度）· `write_audio/`（引擎源码副本）· `render.py`（编码管线/报告/条带）· `checks.py`（闪烁检测）· `fonts.py`
+- `runtime/write_video/`：`film.py`（模型/预设/排版/lint）· `canvas.py`（画布/缓动/颜色）· `audio.py`（音效/配乐渲染/响度）· `write_audio/`（配乐渲染模块，可替换）· `render.py`（编码管线/报告/条带）· `checks.py`（闪烁检测）· `fonts.py`
 - `knowledge/planning.md` · `knowledge/compose.md`；`SKILL.md` · `README.md`
 - `examples/hello-world/film.py`（可运行示例片）；`_dev/`（开发测试脚本，可删）
 
@@ -52,7 +53,7 @@
 - 闪烁检测：320x176 缩略 + 16px 块 + 尖峰判定 + 平移复核（±20px）；排除清单支持全局窗口与区域窗口（转场/slam/punch）
 - 音频：ffmpeg `loudnorm` 测响度 → 增益 → tanh 软限幅（ceiling 0.82）→ 再测；-16 LUFS 达标
 - 编码器自动探测（libx264→nvenc→qsv→amf→mf→openh264），结果缓存在临时目录
-- 配乐：**引擎只渲染**（write-audio），无风格模板。AI 在脚本里用 `cf.wa`（`Song`/`Track`/`note`/`notes`/`grid`/`hit`/`hits`/`sidechain`/`fade`/`length`）显式写出乐谱，赋给 `film.music`；
+- 配乐：**渲染模块只渲染**，无风格模板。AI 在脚本里用 `cf.wa`（`Song`/`Track`/`note`/`notes`/`grid`/`hit`/`hits`/`sidechain`/`fade`/`length`）显式写出乐谱，赋给 `film.music`；
   `audio.py::render_score(score, duration, gain_db=, lufs=-14)` 调 `Song.render(wav=...)` → `_read_wav_mono()`（0.5L+0.5R 安全下混 / 重采样到 48k）→ 裁剪/补零到 `duration+1s` → 峰值归一 0.85；
   `mix_tracks()` 判类型路由：`write_audio.Song` → 渲染，字符串路径 → 解码循环铺满，`{"score"/"file":..., "gain":dB}` → 带增益。
   音高/和声工具在 `cf.wa`（= `cf.wa.theory`）：`midi`/`freq`/`chord`/`scale`/`resolve_scale`/`SCALES`/`parse_note`/`midi_to_freq`/`midi_to_name`
