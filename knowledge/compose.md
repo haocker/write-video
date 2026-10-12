@@ -20,9 +20,9 @@
 # film.py — <项目名>：分镜见同目录 HANDOFF.md（#编号对应下面各段）
 import os, sys
 sys.path.insert(0, r"<技能目录>/runtime")     # 或设置环境变量 WRITE_VIDEO_RUNTIME
-import write_video as cf
+import write_video as wv
 
-film = cf.Film(1920, 1080, duration=8, theme="midnight", bpm=120)
+film = wv.Film(1920, 1080, duration=8, theme="midnight", bpm=120)
 
 # #1 0–3 钩子：品牌名砸下（slam 提前 0.3 秒起跳）
 s1 = film.scene(0, 3)
@@ -68,7 +68,7 @@ if __name__ == "__main__":
 | `s.image(路径, at=, width=, height=, radius=, title=, caption=, shadow=, bg=, border=, zoom=)` | 只给宽或高则等比。**卡片词**：`title` 加窗口标题栏（卡内顶端，三点+标题+分隔线，自动配卡面）、`caption` 卡外下方说明（caption 样式）、`bg`/`border` 卡面与描边（`True` = 主题色）、`shadow` 柔和投影（默认：卡片与小图开、四角透明图与全屏图自动关）。`zoom` 卡内推近：数值或关键帧 `[(本地秒, 倍数, cx, cy[, 缓动]), ...]`（cx/cy 是 0~1 画面坐标）；占画面 ≥40% 且停留 ≥3s 时**默认自动 Ken Burns**（1.0→1.07 慢推，写了 zoom 则关闭） |
 | `s.draw(fn, at=, width=, height=, bg=, border=, radius=, x=, y=)` | 给了 width/height 是方框元素（参与排版、自动裁剪）；不给是整屏画布 |
 | `s.burst("sparkle"/"confetti", on=元素, at=, radius=)` | 定点爆发 |
-| `s.audio(来源, at=, gain=, text=, words=, on=)` | **配音/旁白/录音**（见「配音」）：来源 = 音频文件路径或 `{path;text;words}`（`cf.voice.tts()` 的返回值直接传）；返回 `.at`（开口）/`.done`（说完）/`.duration`/`.text`/`.words`/`.word("词")`；自动去首尾静音、响度对齐 -16 LUFS；说话时配乐自动 -8dB 闪避 |
+| `s.audio(来源, at=, gain=, text=, words=, on=)` | **配音/旁白/录音**（见「配音」）：来源 = 音频文件路径或 `{path;text;words}`（`wv.voice.tts()` 的返回值直接传）；返回 `.at`（开口）/`.done`（说完）/`.duration`/`.text`/`.words`/`.word("词")`；自动去首尾静音、响度对齐 -16 LUFS；说话时配乐自动 -8dB 闪避 |
 
 通用选项：`at` 命中时刻；`out` 消失时刻；`opacity`；`sfx=False` 关自动音效；
 `sfx=[(0.4,"pop"),(1.2,"success",-8)]` 自定义音效列表（相对 at 的秒数）。
@@ -118,22 +118,22 @@ error / riser / glitch / sparkle / notification / typing / bassdrop / shutter
 
 ### 配乐（只渲染，不含模板）
 
-配乐**没有风格模板**——引擎只做渲染，编曲由你自己写。用 `cf.wa` 构造一份乐谱，赋给 `film.music`：
+配乐**没有风格模板**——引擎只做渲染，编曲由你自己写。用 `wv.wa` 构造一份乐谱，赋给 `film.music`：
 
 ```python
-score = cf.wa.Song(bpm=120, beats_per_bar=4, tail=0.5)
+score = wv.wa.Song(bpm=120, beats_per_bar=4, tail=0.5)
 pad   = score.track("pad",   name="pad",   gain_db=-16.0, seed=1)
 bass  = score.track("bass",  name="bass",  gain_db=-9.0)
 pluck = score.track("pluck", name="arp",   gain_db=-11.0, pan=0.12)
 
-MAJ = cf.wa.resolve_scale("major")            # 音阶：半音偏移序列
+MAJ = wv.wa.resolve_scale("major")            # 音阶：半音偏移序列
 def chord(deg):                               # 级数 → 音名列表
     k = len(MAJ)
     return [60 + MAJ[i % k] + 12 * (i // k) for i in (deg, deg + 2, deg + 4)]
 
 PROG = (0, 4, 5, 3)                           # I–V–vi–IV
 for bi in range(bars):
-    b0, ch = bi * 4.0, [cf.wa.theory.midi_to_name(m) for m in chord(PROG[bi % 4])]
+    b0, ch = bi * 4.0, [wv.wa.theory.midi_to_name(m) for m in chord(PROG[bi % 4])]
     for n in ch:
         pad.note(b0, n, 4.05, 0.5)            # 长音垫底
     pluck.grid(b0, 0.5, [ch[0], ch[1], ch[2], ch[1]], dur=0.55, vel=0.5)   # 琶音
@@ -145,7 +145,7 @@ score.fade(out_seconds=2.5)                   # 片尾淡出
 film.music = score
 ```
 
-**乐谱 API（`cf.wa`）**
+**乐谱 API（`wv.wa`）**
 
 | 用途 | 写法 |
 |---|---|
@@ -160,7 +160,7 @@ film.music = score
 
 乐器（`track()` 第一个参数）：`bass` / `pluck` / `bell` / `rhodes`（音高类）；`kick` / `hat` / `clap` / `snare` / `crash`（打击类）；`pad`（和声垫）；`vinyl`（噪纹）；`riser`（上行）；另有 19 种 SFX 名。
 
-音高与和声工具（`cf.wa` 顶层 / `cf.wa.theory`）：`midi("A3")→57`、`freq(...)`、`chord(...)`、`scale(...)`、`resolve_scale("major"/"minor"/"dorian"/...)`、`SCALES`、`parse_note`、`midi_to_freq`、`midi_to_name`。
+音高与和声工具（`wv.wa` 顶层 / `wv.wa.theory`）：`midi("A3")→57`、`freq(...)`、`chord(...)`、`scale(...)`、`resolve_scale("major"/"minor"/"dorian"/...)`、`SCALES`、`parse_note`、`midi_to_freq`、`midi_to_name`。
 
 **要点**
 
@@ -172,23 +172,23 @@ film.music = score
 
 ### 配音（edge-tts → `s.audio`）
 
-配音只认音频文件：`cf.voice.tts()` 生成的、真人录的、别人给的 mp3 都一样，走同一条 `s.audio` 通道进片。
+配音只认音频文件：`wv.voice.tts()` 生成的、真人录的、别人给的 mp3 都一样，走同一条 `s.audio` 通道进片。
 
 ```python
-import write_video as cf
+import write_video as wv
 
-v1 = cf.voice.tts("只用一句话，能做视频吗？", "/res/voice/q1.mp3")   # 晓晓（默认女声）
+v1 = wv.voice.tts("只用一句话，能做视频吗？", "/res/voice/q1.mp3")   # 晓晓（默认女声）
 q = s.audio(v1, at=0.8)                        # v1 直接传：path/text/words 全带上
 s.text(v1["text"], at=q.at, style="subtitle")  # 台词长在画面里（不做字幕条）
 s.text("品牌名", at=q.done + 0.5, style="hero", enter="slam")
 
-v2 = cf.voice.tts("能。一句代码，一支短片。", "/res/voice/a1.mp3", voice="云希", rate=5)
+v2 = wv.voice.tts("能。一句代码，一支短片。", "/res/voice/a1.mp3", voice="云希", rate=5)
 a = s.audio(v2, at=q.done + 0.4)
 s.text("那句代码", at=a.word("代码"))            # 精确到词（词时间来自合成）
 ```
 
 - 依赖与联网：`pip install edge-tts`；合成走在线服务，**需要联网**。合成结果缓存在 `<路径>.json`（同文/同音色/同参数不重复联网）。
-- 音色：别名 `晓晓`（默认）/`晓伊`/`云希`/`云健`/`云扬`/`晓北`（东北）/`晓妮`（陕西）/`粤语女`/`粤语男`/`台湾女`/`台湾男`；也可直接写完整音色名（`cf.voice.list_voices("zh")` 看全部）。`rate`/`volume` 写 `-10` 或 `"-10%"`。
+- 音色：别名 `晓晓`（默认）/`晓伊`/`云希`/`云健`/`云扬`/`晓北`（东北）/`晓妮`（陕西）/`粤语女`/`粤语男`/`台湾女`/`台湾男`；也可直接写完整音色名（`wv.voice.list_voices("zh")` 看全部）。`rate`/`volume` 写 `-10` 或 `"-10%"`。
 - 词时间：返回的 `words = [[词, 开头秒, 时长], ...]`（相对文件开头）；`q.word("词"[, 第几次])` 得到该词的成片秒，直接写进画面元素的 `at`。词表缺失时按字数估算（lint 记 info）；找不到的词记 error 级 lint。
 - 时间手法：下一句写 `at=q.done + 0.3`；画面文字写 `at=q.at`；要让元素跟着声音出现就写 `on=q`。
 - 响度：每段自动对齐 -16 LUFS（不同音色/来源能差 5dB 以上），`gain` 再微调。说话期间配乐自动压低 8dB（开口前 0.15s 压、说完保持 0.25s、0.6s 回升；两段间隔 <1s 中间不回升），音效不受影响。
@@ -345,7 +345,7 @@ def shot(c, t):
 8. 想彻底无缝的连续镜头：把绘制挂在**全片层** `film.draw(fn, at=0)`（场景内的整屏自绘会在场景结束时被淡出）。
 9. 渲染前先 `film.lint()`；有 error（找不到图片/未知音效）会拒绝渲染。
 10. 单帧 PNG 已做加速；整片速度看报告的 `timings.frames`。
-11. 配音 mp3 手工替换后要删掉同名 `.json` 缓存（否则词时间还是旧的）；`cf.voice.tts()` 换参数时会自动重合成。
+11. 配音 mp3 手工替换后要删掉同名 `.json` 缓存（否则词时间还是旧的）；`wv.voice.tts()` 换参数时会自动重合成。
 
 ## 性能（本机参考）
 

@@ -4,8 +4,8 @@
 配音只认音频文件：本模块生成的 mp3、真人录音、别人给的音频，都走同一条
 `s.audio` / `film.audio` 通道进片；这里只是“生成”这一环的助手：
 
-    import write_video as cf
-    v = cf.voice.tts("只用一句话，能做视频吗？", "/res/voice/q1.mp3")
+    import write_video as wv
+    v = wv.voice.tts("只用一句话，能做视频吗？", "/res/voice/q1.mp3")
     q = s.audio(v, at=0.8)        # v = {path; text; words; ...}，直接传给 audio
     s.text(v["text"], at=q.at)      # 台词长在画面里
     s.text("品牌名", at=q.done + 0.5, style="hero", enter="slam")
@@ -22,7 +22,7 @@ import os
 
 DEFAULT_VOICE = "zh-CN-XiaoxiaoNeural"
 
-# 中文常用音色速查（也可以用完整音色名；用 cf.voice.list_voices() 看全部）
+# 中文常用音色速查（也可以用完整音色名；用 wv.voice.list_voices() 看全部）
 VOICE_ALIASES = {
     "晓晓": "zh-CN-XiaoxiaoNeural",          # 女声・通用旁白（默认）
     "晓伊": "zh-CN-XiaoyiNeural",            # 女声・活泼

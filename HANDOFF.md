@@ -6,7 +6,7 @@
 
 - 阶段：**v0.4.0（更名为 write-video / write_video；配乐改为纯渲染，去掉全部风格模板）**。
   - **v0.4.0（本次）**：项目由 `codingfilm` 更名为 **`write-video`**（Python 包 `codingfilm` → `write_video`，
-    运行时目录 `runtime/codingfilm/` → `runtime/write_video/`，脚本 `import codingfilm as cf` → `import write_video as cf`）。
+    运行时目录 `runtime/codingfilm/` → `runtime/write_video/`，脚本 `import codingfilm as cf` → `import write_video as wv`）。
     环境变量统一前缀：`CODINGFILM_RUNTIME`→`WRITE_VIDEO_RUNTIME`、`CF_FFMPEG`→`WV_FFMPEG`、
     `CF_FONT_*`→`WV_FONT_*`；临时文件前缀改 `write_video_*`；控制台标签改 `[write-video]`。
     重命名后示例片重渲结果与原版**完全一致**（0 闪烁 / lint 0-0-0 / -16.0 LUFS / TP -2.2 dB）。
@@ -18,12 +18,12 @@
     `mix_tracks()` 的配乐分支改为：`film.music` 是 `write_audio.Song` → `render_score()`，
     是文件路径 → 解码循环铺满。当前渲染实现以源码放在 `runtime/write_video/write_audio/`，**可整体替换**
     （换实现只需替换该目录 + 调整 `write_video/__init__.py` 的导出）。
-    `write_video/__init__.py` 导出 `write_audio` 与别名 `wa`（脚本里写 `cf.wa.Song(...)`）。
+    `write_video/__init__.py` 导出 `write_audio` 与别名 `wa`（脚本里写 `wv.wa.Song(...)`）。
   - **零回归项**：音效合成（19 种）、配音（edge-tts / 外部音频）、配乐闪避、混音、响度归一全部未动。
   - 验证：示例片《Hello, World!》20s 重渲（乐谱：C 大调 I–V–vi–IV，pad/arp/bass 三声部）——
     **0 闪烁 / lint 0-0-0 / -16.0 LUFS / 真峰值 -2.2 dBTP**；`render_score` 单独验证峰值 0.850、无 nan/inf。
   - v1.1 新增**自定义配乐**（调性/音阶/和弦进行/音型/主旋律）；
-  - v1.2 新增第一批**内容通道**：`s.audio` 外部音频/配音（配乐自动闪避 + 逐词对齐 + `cf.voice.tts()` edge-tts 助手）、image 卡片（`title` 窗口框 / `caption` 说明 / `shadow` 投影 / `zoom` 卡内推近）、自动 Ken Burns、`split="word"` 逐词入场。
+  - v1.2 新增第一批**内容通道**：`s.audio` 外部音频/配音（配乐自动闪避 + 逐词对齐 + `wv.voice.tts()` edge-tts 助手）、image 卡片（`title` 窗口框 / `caption` 说明 / `shadow` 投影 / `zoom` 卡内推近）、自动 Ken Burns、`split="word"` 逐词入场。
 - 位置：`./`（仓库根目录）
 - 验证记录：
   - 示例片《Hello, World!》20s / 1920x1080 / 30fps：渲染 61.5s，**0 闪烁事件、lint 0/0/0、-16.0 LUFS / -2.9 dBTP**；
@@ -53,10 +53,10 @@
 - 闪烁检测：320x176 缩略 + 16px 块 + 尖峰判定 + 平移复核（±20px）；排除清单支持全局窗口与区域窗口（转场/slam/punch）
 - 音频：ffmpeg `loudnorm` 测响度 → 增益 → tanh 软限幅（ceiling 0.82）→ 再测；-16 LUFS 达标
 - 编码器自动探测（libx264→nvenc→qsv→amf→mf→openh264），结果缓存在临时目录
-- 配乐：**渲染模块只渲染**，无风格模板。AI 在脚本里用 `cf.wa`（`Song`/`Track`/`note`/`notes`/`grid`/`hit`/`hits`/`sidechain`/`fade`/`length`）显式写出乐谱，赋给 `film.music`；
+- 配乐：**渲染模块只渲染**，无风格模板。AI 在脚本里用 `wv.wa`（`Song`/`Track`/`note`/`notes`/`grid`/`hit`/`hits`/`sidechain`/`fade`/`length`）显式写出乐谱，赋给 `film.music`；
   `audio.py::render_score(score, duration, gain_db=, lufs=-14)` 调 `Song.render(wav=...)` → `_read_wav_mono()`（0.5L+0.5R 安全下混 / 重采样到 48k）→ 裁剪/补零到 `duration+1s` → 峰值归一 0.85；
   `mix_tracks()` 判类型路由：`write_audio.Song` → 渲染，字符串路径 → 解码循环铺满，`{"score"/"file":..., "gain":dB}` → 带增益。
-  音高/和声工具在 `cf.wa`（= `cf.wa.theory`）：`midi`/`freq`/`chord`/`scale`/`resolve_scale`/`SCALES`/`parse_note`/`midi_to_freq`/`midi_to_name`
+  音高/和声工具在 `wv.wa`（= `wv.wa.theory`）：`midi`/`freq`/`chord`/`scale`/`resolve_scale`/`SCALES`/`parse_note`/`midi_to_freq`/`midi_to_name`
 - 混音结构：music / voice / sfx 三条来源；配音段只压配乐（-8dB，0.15s 前压 / 0.25s 保持 / 0.6s 回升 / 间隔 <1s 不回升），音效不受影响；无配音时与 v1 逐字节一致（回归基线 `_dev/_base_frames.py`）
 - 配音管线：解码 → 去首尾静音（-50dB, 0.03s pad）→ 每段响度对齐 -16 LUFS → 边缘 12ms 淡化；**词时间以文件开头为参照，s.audio 自动补偿头部裁剪**（`prepare_voice` 返回 `(buf, lead)`）
 - edge-tts（7.x）：`Communicate(..., boundary="WordBoundary")` 才给逐词事件（默认 Sentence）；事件 offset/duration 单位 100ns；Windows 上用 SelectorEventLoop 避免 Proactor 关闭噪音；合成结果缓存 `<path>.json`（key = 文本+音色+参数 md5）

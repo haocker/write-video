@@ -2,14 +2,14 @@
 """write-video — 用代码编排视频（通用版）。
 
 基本用法：
-    import write_video as cf
+    import write_video as wv
 
-    film = cf.Film(1920, 1080, theme="midnight")
+    film = wv.Film(1920, 1080, theme="midnight")
     s = film.scene(0, 4)
     s.text("你好，世界", at=0.6, style="hero", enter="slam")
 
     # 配乐：用内置的渲染模块自己写乐谱（引擎只做渲染，无风格模板）
-    score = cf.wa.Song(bpm=120)
+    score = wv.wa.Song(bpm=120)
     score.track("pad").notes([(0, "A3", 4, 0.5)])
     score.length(beats=8)
     film.music = score

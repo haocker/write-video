@@ -1193,7 +1193,7 @@ class Film(object):
     def __init__(self, width=1920, height=1080, duration=None, fps=30, ss=2,
                  theme="midnight", bpm=120, music=None, seed=1, grain=True, name="film"):
         """music 配乐来源，二选一：
-             * 乐谱 Song 对象（`cf.wa.Song(...)`，乐谱自己写）；
+             * 乐谱 Song 对象（`wv.wa.Song(...)`，乐谱自己写）；
              * 现成音频文件路径（循环铺满全片）；
              * 或 dict：{"score": <Song>} / {"file": <路径>}，可带 "gain"（dB）。
         """

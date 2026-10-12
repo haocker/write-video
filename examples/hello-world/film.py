@@ -18,7 +18,7 @@ for _p in (os.environ.get("WRITE_VIDEO_RUNTIME", ""),
     if _p and os.path.isdir(_p) and _p not in sys.path:
         sys.path.insert(0, _p)
 
-import write_video as cf
+import write_video as wv
 
 W, H = 1920, 1080
 OUT = os.path.join(HERE, "artifacts")
@@ -110,7 +110,7 @@ _NOTE_NAMES = ("C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B")
 
 def make_score(duration, bpm):
     """《Hello, World!》的配乐：C 大调，I–V–vi–IV 循环，20 秒收尾落主和弦。"""
-    wa = cf.wa
+    wa = wv.wa
     spb = 60.0 / bpm                      # 每拍秒数
     bar = spb * 4.0                       # 每小节秒数
     total_beats = duration / spb
@@ -154,7 +154,7 @@ def make_score(duration, bpm):
 
 
 # ================================================================ 影片
-film = cf.Film(W, H, duration=20.0, fps=30, ss=2, theme="midnight",
+film = wv.Film(W, H, duration=20.0, fps=30, ss=2, theme="midnight",
                bpm=120, name="hello-world")
 film.music = make_score(film.duration, film.bpm)
 
