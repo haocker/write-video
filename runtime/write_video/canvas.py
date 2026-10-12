@@ -9,6 +9,7 @@
 import math
 
 import numpy as np
+import skia
 from PIL import Image, ImageDraw
 
 from . import fonts as _fonts
@@ -418,33 +419,23 @@ class Canvas(object):
         spr = scale_sprite(glow_sprite(col, alpha), round(2 * r * self.ss))
         self.img.paste(spr, (self._ix(x - r), self._iy(y - r)), spr)
 
-    # ---------- 装饰级效果 ----------
+    # ---------- skia 加速装饰效果 ----------
 
-    def _gradient_stops(self, colors):
-        """colors: [(位置0~1, 颜色名)] → [(位置, (r,g,b))]"""
-        pal = self._palette()
-        stops = [(0.0, parse_color(colors[0][1], pal))]
-        for pos, c in colors:
-            stops.append((pos, parse_color(c, pal)))
-        if stops[-1][0] < 1.0:
-            stops.append((1.0, stops[-1][1]))
-        return stops
+    def _skia_surface(self, w_px, h_px):
+        """创建 skia 表面（写入共享 numpy 数组后转 PIL）。"""
+        info = skia.ImageInfo.Make(w_px, h_px, skia.kRGBA_8888_ColorType, skia.kUnpremul_AlphaType)
+        arr = np.zeros((h_px, w_px, 4), dtype=np.uint8)
+        surf = skia.Surface.MakeRasterDirect(info, arr, arr.strides[0])
+        return surf, arr
 
-    def _gradient_at(self, t, stops):
-        if t <= stops[0][0]:
-            return stops[0][1]
-        for i in range(1, len(stops)):
-            if t <= stops[i][0]:
-                lo, hi = stops[i - 1], stops[i]
-                span = hi[0] - lo[0]
-                u = (t - lo[0]) / span if span > 0 else 0.5
-                return tuple(int(round(lo[1][j] + (hi[1][j] - lo[1][j]) * u)) for j in range(3))
-        return stops[-1][1]
+    def _skia_to_pil(self, arr):
+        """skia 的 numpy 数组 → PIL RGBA Image。"""
+        return Image.frombuffer("RGBA", (arr.shape[1], arr.shape[0]), arr, "raw", "RGBA", 0, 1)
 
     def gradient(self, x=0, y=0, w=None, h=None, colors=None, direction="radial", alpha=1.0):
-        """渐变填充矩形区域。
+        """渐变填充矩形区域（skia 着色器加速）。
         不传 x/y/w/h 则铺满全画布。
-        colors: [(位置0~1, 颜色名), ...]  如 [(0,"bg"), (0.5,"accent"), (1,"bg")]
+        colors: [(位置0~1, 颜色名), ...]
         direction: "radial" / "vertical" / "horizontal"
         """
         if w is None:
@@ -452,96 +443,107 @@ class Canvas(object):
         if h is None:
             h = self.height
         if colors is None:
-            colors = [(0.0, "bg"), (1.0, "accent")]
+            colors = [(0.0, "accent"), (1.0, "bg")]
         w_px = max(1, int(round(w * self.ss)))
         h_px = max(1, int(round(h * self.ss)))
-        stops = self._gradient_stops(colors)
-        alp_frac = clamp(alpha, 0.0, 1.0)
+        pal = self._palette()
+        stops = []
+        for pos, c in colors:
+            r, g, b = parse_color(c, pal)
+            stops.append((pos, (r, g, b)))
+        if not stops:
+            return
+        if stops[-1][0] < 1.0:
+            stops.append((1.0, stops[-1][1]))
+        sk_colors = [skia.Color4f(r / 255.0, g / 255.0, b / 255.0, clamp(alpha, 0, 1)) for _, (r, g, b) in stops]
+        sk_pos = [s[0] for s in stops]
+
+        surf, arr = self._skia_surface(w_px, h_px)
+        canv = surf.getCanvas()
+        rect = skia.Rect.MakeXYWH(0, 0, w_px, h_px)
 
         if direction == "radial":
             cx, cy = w_px / 2.0, h_px / 2.0
-            max_r = math.hypot(cx, cy)
-            yy, xx = np.mgrid[0:h_px, 0:w_px]
-            dist = np.sqrt((xx - cx) ** 2 + (yy - cy) ** 2) / max_r
-            arr = np.zeros((h_px, w_px, 4), dtype=np.uint8)
-            for i in range(3):
-                arr[:, :, i] = np.uint8(self._gradient_at(0.0, stops)[i])
-            for si in range(1, len(stops)):
-                lo, hi = stops[si - 1], stops[si]
-                mask = (dist >= lo[0]) & (dist < hi[0])
-                span = hi[0] - lo[0]
-                u = ((dist - lo[0]) / span) if span > 0 else 0.5
-                for c in range(3):
-                    lo_v, hi_v = lo[1][c], hi[1][c]
-                    arr[:, :, c] = np.where(mask,
-                                             np.uint8(lo_v + (hi_v - lo_v) * u), arr[:, :, c])
-            arr[:, :, 3] = np.uint8(255 * alp_frac)
+            max_r = max(1, math.hypot(w_px, h_px) / 2)
+            shader = skia.GradientShader.MakeRadial(
+                skia.Point(cx, cy), max_r, sk_colors, sk_pos, skia.TileMode.kClamp)
+        elif direction == "vertical":
+            shader = skia.GradientShader.MakeLinear(
+                skia.Point(0, 0), skia.Point(0, h_px), sk_colors, sk_pos, skia.TileMode.kClamp)
         else:
-            if direction == "vertical":
-                t = np.linspace(0, 1, h_px).reshape(-1, 1)
-            else:
-                t = np.linspace(0, 1, w_px).reshape(1, -1)
-            arr = np.zeros((h_px, w_px, 4), dtype=np.uint8)
-            for si in range(1, len(stops)):
-                lo, hi = stops[si - 1], stops[si]
-                span = hi[0] - lo[0]
-                u = ((t - lo[0]) / span) if span > 0 else 0.5
-                mask = (t >= lo[0]) & (t < hi[0])
-                for c in range(3):
-                    lo_v, hi_v = lo[1][c], hi[1][c]
-                    arr[:, :, c] = np.where(mask,
-                                             np.uint8(lo_v + (hi_v - lo_v) * u), arr[:, :, c])
-            arr[:, :, 3] = np.uint8(255 * alp_frac)
+            shader = skia.GradientShader.MakeLinear(
+                skia.Point(0, 0), skia.Point(w_px, 0), sk_colors, sk_pos, skia.TileMode.kClamp)
 
-        grad = Image.fromarray(arr, "RGBA")
-        self.img.paste(grad, (self._ix(x), self._iy(y)), grad)
+        p = skia.Paint()
+        p.setShader(shader)
+        canv.drawRect(rect, p)
+        del canv, surf, shader, p
+        pil = self._skia_to_pil(arr)
+        self.img.paste(pil, (self._ix(x), self._iy(y)), pil)
 
     def vignette(self, radius=0.65, power=1.8, color=(0, 0, 0), alpha=0.55):
-        """边缘暗角。radius 暗角起始半径比例，power 衰减指数。"""
-        w_px = int(round(self.width * self.ss))
-        h_px = int(round(self.height * self.ss))
+        """边缘暗角（skia 径向渐变加速）。"""
+        w_px = max(1, int(round(self.width * self.ss)))
+        h_px = max(1, int(round(self.height * self.ss)))
         cx, cy = w_px / 2.0, h_px / 2.0
         max_r = math.hypot(cx, cy)
-        yy, xx = np.mgrid[0:h_px, 0:w_px]
-        d = np.sqrt((xx - cx) ** 2 + (yy - cy) ** 2) / max_r
-        t = np.clip((d - radius) / (1.0 - radius), 0, 1)
-        t = np.power(t, power)
-        a = np.uint8(t * 255 * clamp(alpha, 0, 1))
-        c = tuple(int(clamp(v, 0, 255)) for v in color)
-        arr = np.dstack([np.full((h_px, w_px), c[0], dtype=np.uint8),
-                         np.full((h_px, w_px), c[1], dtype=np.uint8),
-                         np.full((h_px, w_px), c[2], dtype=np.uint8),
-                         a])
-        vit = Image.fromarray(arr, "RGBA")
-        self.img.paste(vit, (0, 0), vit)
+        c = tuple(clamp(v, 0, 255) for v in color)
+        inner = skia.Color4f(0, 0, 0, 0)
+        outer = skia.Color4f(c[0] / 255.0, c[1] / 255.0, c[2] / 255.0, clamp(alpha, 0, 1))
+
+        surf, arr = self._skia_surface(w_px, h_px)
+        canv = surf.getCanvas()
+        shader = skia.GradientShader.MakeRadial(
+            skia.Point(cx, cy), max_r, [inner, outer],
+            [clamp(radius, 0, 0.999), 1.0], skia.TileMode.kClamp)
+        p = skia.Paint()
+        p.setShader(shader)
+        canv.drawRect(skia.Rect.MakeXYWH(0, 0, w_px, h_px), p)
+        del canv, surf, shader, p
+        pil = self._skia_to_pil(arr)
+        self.img.paste(pil, (0, 0), pil)
 
     def grid(self, spacing=80, color="soft", alpha=0.05, width=1.0):
-        """科技网格背景线。"""
-        w_px = int(round(self.width * self.ss))
-        h_px = int(round(self.height * self.ss))
+        """科技网格背景线（skia 加速）。"""
+        w_px = max(1, int(round(self.width * self.ss)))
+        h_px = max(1, int(round(self.height * self.ss)))
         sp = max(4, int(round(spacing * self.ss)))
         col = self._fill(color, alpha)
         if col is None:
             return
-        ov = Image.new("RGBA", (w_px, h_px), (0, 0, 0, 0))
-        d = ImageDraw.Draw(ov)
+
+        surf, arr = self._skia_surface(w_px, h_px)
+        canv = surf.getCanvas()
+        p = skia.Paint()
+        p.setColor(skia.Color(*col))
+        p.setStrokeWidth(max(1, int(round(width * self.ss))))
+        p.setStyle(skia.Paint.kStroke_Style)
+        p.setAntiAlias(True)
         for x in range(0, w_px, sp):
-            d.line([(x, 0), (x, h_px)], fill=col, width=max(1, int(round(width * self.ss))))
+            canv.drawLine(x, 0, x, h_px, p)
         for y in range(0, h_px, sp):
-            d.line([(0, y), (w_px, y)], fill=col, width=max(1, int(round(width * self.ss))))
-        self.img.paste(ov, (0, 0), ov)
+            canv.drawLine(0, y, w_px, y, p)
+        del canv, surf, p
+        pil = self._skia_to_pil(arr)
+        self.img.paste(pil, (0, 0), pil)
 
     def scanlines(self, spacing=3, alpha=0.08):
-        """水平扫描线。"""
-        w_px = int(round(self.width * self.ss))
-        h_px = int(round(self.height * self.ss))
+        """水平扫描线（CRT 效果，skia 加速）。"""
+        w_px = max(1, int(round(self.width * self.ss)))
+        h_px = max(1, int(round(self.height * self.ss)))
         sp = max(1, int(round(spacing * self.ss)))
-        col = (0, 0, 0, int(255 * clamp(alpha, 0, 1)))
-        ov = Image.new("RGBA", (w_px, h_px), (0, 0, 0, 0))
-        d = ImageDraw.Draw(ov)
+
+        surf, arr = self._skia_surface(w_px, h_px)
+        canv = surf.getCanvas()
+        p = skia.Paint()
+        p.setColor(skia.Color(0, 0, 0, int(255 * clamp(alpha, 0, 1))))
+        p.setStyle(skia.Paint.kFill_Style)
         for y in range(0, h_px, sp * 2):
-            d.rectangle([(0, y), (w_px - 1, y + sp - 1)], fill=col)
-        self.img.paste(ov, (0, 0), ov)
+            rh = min(sp, h_px - y)
+            canv.drawRect(skia.Rect.MakeXYWH(0, y, w_px, rh), p)
+        del canv, surf, p
+        pil = self._skia_to_pil(arr)
+        self.img.paste(pil, (0, 0), pil)
 
     # ---------- 工具 ----------
     def progress(self, a, b, ease_name="linear"):
