@@ -1384,6 +1384,16 @@ class Film(object):
             self._layout_group(sc.elements, sc.end)
             for el in sc.elements:
                 self._lint_elem(el, sc.end)
+        for sc in self.scenes:
+            ats = [el.at for el in sc.elements
+                   if el.kind in ("text", "counter", "list", "image", "draw")]
+            if ats:
+                gap = min(ats) - sc.start
+                if gap > 1.0:
+                    self._lint_add("warn", sc.start,
+                                   "场景开头空白 %.1f 秒（首个画面元素 %.2fs 才出现）："
+                                   "把结构性锚点（标题/步骤号）落在场景开头 0.5s 内，"
+                                   "词对齐元素不承担开场" % (gap, min(ats)))
         self._layout_group(self.elements, self.duration)
         for el in self.elements:
             self._lint_elem(el, self.duration)
