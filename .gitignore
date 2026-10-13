@@ -12,3 +12,7 @@ check/
 *.sheet.png
 *.report.txt
 *.flicker.png
+
+# README 效果预览素材例外
+!assets/*.mp4
+!assets/*.png
