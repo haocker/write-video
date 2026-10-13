@@ -278,8 +278,9 @@ class Elem(object):
         self.items = [str(x) for x in self.content]
         self._icon = opt.get("icon")
         icon = self._icon
-        gap_scale = float(opt.get("gap", 0.55))
-        row_gap = self.size * gap_scale
+        gap = float(opt.get("gap", 0.55))
+        # gap < 1.0 按字号比例；>= 1.0 视为像素间距
+        row_gap = self.size * gap if gap < 1.0 else gap
         rows_wh = []
         glyph_pad = 0.0
         if icon:
