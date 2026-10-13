@@ -419,6 +419,21 @@ class Canvas(object):
         spr = scale_sprite(glow_sprite(col, alpha), round(2 * r * self.ss))
         self.img.paste(spr, (self._ix(x - r), self._iy(y - r)), spr)
 
+    def paste_full(self, im, alpha=1.0):
+        """贴一张与画布同比例的整幅图（自动按超采样 ss 缩放到画幅，铺满全画布）。"""
+        w_px = max(1, int(round(self.width * self.ss)))
+        h_px = max(1, int(round(self.height * self.ss)))
+        if im.size != (w_px, h_px):
+            im = im.resize((w_px, h_px), Image.LANCZOS)
+        if im.mode == "RGBA":
+            if alpha < 0.996:
+                a = im.getchannel("A").point(lambda v: int(v * alpha))
+                im = im.copy()
+                im.putalpha(a)
+            self.img.paste(im, (0, 0), im)
+        else:
+            self.img.paste(im, (0, 0))
+
     # ---------- skia 加速装饰效果 ----------
 
     def _skia_surface(self, w_px, h_px):

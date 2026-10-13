@@ -189,15 +189,19 @@ def make_bg():
 
 
 _BG_CACHE = None
+_BG_SCALED = (None, None)
 
 
 def dust(c, t):
     """全片层：静态背景 + 微粒漂动。"""
-    global _BG_CACHE
+    global _BG_CACHE, _BG_SCALED
     if _BG_CACHE is None:
         _BG_CACHE = make_bg()
-    bg = _BG_CACHE
-    c.img.paste(bg, (0, 0), bg) if bg.mode == "RGBA" else c.img.paste(bg, (0, 0))
+    if _BG_SCALED[0] != c.ss:
+        from PIL import Image as _PIL
+        _BG_SCALED = (c.ss, _BG_CACHE.resize(
+            (round(c.width * c.ss), round(c.height * c.ss)), _PIL.LANCZOS))
+    c.paste_full(_BG_SCALED[1])
     # 极淡的微粒漂动
     W_, H_ = c.width, c.height
     for i in range(40):
