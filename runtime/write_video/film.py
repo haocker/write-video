@@ -1307,10 +1307,48 @@ class Film(object):
             print("[%s] %.2fs %s" % (it["level"], it["t"], it["msg"]))
 
     # ---------------- 准备 ----------------
+    def _auto_extend_scenes(self):
+        """有配音的场景自动拉到配音结束，后续场景/元素/音效整体顺延。
+
+        场景时长自动覆盖配音播完（+0.15s 收尾），后续场景 start/end、
+        场景内元素 at、全局手动 sfx/shake 时间全部平移，保持相对时间轴，
+        让配音"驱动"影片节奏，避免配音剪断或重叠。"""
+        pad = 0.15
+        for i, sc in enumerate(self.scenes):
+            done = max((e.done for e in sc.elements
+                        if e.kind == "audio" and e.done is not None), default=None)
+            if done is None:
+                continue
+            need = done + pad
+            if need <= sc.end + 1e-6:
+                continue
+            shift = need - sc.end
+            threshold = sc.end
+            sc.end = need
+            for nxt in self.scenes[i + 1:]:
+                nxt.start += shift
+                nxt.end += shift
+                for e in nxt.elements:
+                    if e.at >= threshold - 1e-6:
+                        e.at += shift
+                        if e.done is not None:
+                            e.done += shift
+                        for ch in e.children:
+                            ch.at += shift
+                            if ch.done is not None:
+                                ch.done += shift
+            for j, it in enumerate(self._sfx_user):
+                if it[0] >= threshold - 1e-6:
+                    self._sfx_user[j] = (it[0] + shift, it[1], it[2], it[3], it[4])
+            for j, it in enumerate(self._shake_user):
+                if it[0] >= threshold - 1e-6:
+                    self._shake_user[j] = (it[0] + shift, it[1], it[2])
+
     def _prepare(self):
         if self._prepared:
             return
         self.scenes.sort(key=lambda s: s.start)
+        self._auto_extend_scenes()
         prev = None
         for i, sc in enumerate(self.scenes):
             sc.index = i
