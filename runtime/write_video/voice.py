@@ -127,14 +127,15 @@ def _synthesize(text, path, voice, rate, volume, pitch, proxy=None):
     return words
 
 
-def tts(text, path, voice=None, rate=None, volume=None, pitch=None,
+def tts(text, path, voice=None, rate="+25%", volume=None, pitch=None,
         cache=True, proxy=None):
     """把一句台词合成成配音文件（默认 mp3）。
 
     text    台词（标点会被读出来，但不出现在 words 里）
     path    输出路径（相对路径按当前工作目录；工程里习惯写 "/res/voice/xx.mp3"）
     voice   音色：别名（"晓晓"/"粤语女"…）或完整音色名，默认晓晓
-    rate    语速，如 -10 或 "-10%"；volume 音量，如 5 或 "+5%"；pitch 音高，如 "-2Hz"
+    rate    语速，如 -10 或 "-10%"，默认 "+25%"（1.25 倍速）；
+            volume 音量，如 5 或 "+5%"；pitch 音高，如 "-2Hz"
     返回   {path; text; voice; rate; volume; pitch; words}，可直接传给 s.audio；
            words = [[词, 开头秒, 时长], ...]（相对文件开头）
     """
