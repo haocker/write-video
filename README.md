@@ -1,5 +1,9 @@
 # write-video
 
+<p align="center">
+  <img src="assets/logo.png" width="140" alt="write-video logo">
+</p>
+
 > **这是一个 Skill（AI 技能包）。** 用代码编排短视频 / MP4（code-to-video）：策划分镜 → 写 Python 影片脚本 → 渲染带配乐与音效的成片。
 
 `write-video` 是一个给 AI 智能体（Claude Code / Codex 等支持 Skill 的工具）使用的**技能包**：
@@ -11,6 +15,15 @@
 
 写一个 Python 脚本，声明场景与元素（文字、清单、数字、图片卡片、自绘、配音），
 合成配乐与音效，一次 `render` 生成带声 MP4 —— 无需剪辑软件、无需手工对轨。
+
+## 效果预览
+
+演示片（v6 · midnight 主题 · 47 秒）：
+
+![write-video 介绍片](assets/write-video-v6.mp4)
+
+*终端卡打字 × 视频画框生长 / 特性卡 ×3 / 数字卡 ×3 / 对比卡 ×2 / 光环 logo 迸发；自写配乐随内容起伏（氛围开场 → build → 律动 → 收束）。*
+
 
 ## 为什么用它
 
@@ -175,6 +188,7 @@ python film.py
 - `knowledge/compose.md` — 编排指南（阶段 2，API 速查 + 自绘菜单 + 常见坑）
 - `runtime/write_video/` — 运行时库：`film.py` 模型 / `canvas.py` 画布 / `audio.py` 音效 + 配乐渲染 + 混音 / `write_audio/` 配乐渲染模块（可替换） / `voice.py` 配音 / `render.py` 管线 / `checks.py` 闪烁检测 / `fonts.py` 字体
 - `examples/hello-world/` — 示例片
+- `assets/` — README 效果预览用素材（演示片 + logo）
 - `pyproject.toml` / `requirements.txt` — 作为 Python 库安装用
 - `LICENSE` — MIT
 
