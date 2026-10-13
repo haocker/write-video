@@ -51,6 +51,9 @@ THEMES = {
 
 TRANS_DUR = {"cut": 0.0, "fade": 0.5, "flash": 0.4, "wipe": 0.5, "push": 0.5, "zoom": 0.5}
 
+ENTER_DUR = {"fade": 0.5, "rise": 0.6, "slide": 0.5, "pop": 0.5,
+             "punch": 0.35, "slam": 0.30, "type": 0.0}
+
 SFX_AUTO = {
     "pop": ("pop", 0.0, 0.0),
     "rise": ("swish", 0.0, -9.0),
@@ -273,6 +276,8 @@ class Elem(object):
         split = opt.get("split")
         if split in ("char", "line", "word"):
             self._make_children(opt, split)
+        elif self.enter == "type":
+            self.done = self.at + len("".join(self.lines)) * 0.045
 
     def _init_list(self, opt):
         self.items = [str(x) for x in self.content]
@@ -544,9 +549,11 @@ class Elem(object):
             ch._off = (lx, ly)
             ch.opacity = self.opacity
             self.children.append(ch)
+        eff_enter = self.enter or self._default_enter
         if split in ("char", "word"):
             self.done = self.at + max(0, idx - 1) * (
-                stagger if isinstance(stagger, (int, float)) else (0.045 if split == "char" else 0.07))
+                stagger if isinstance(stagger, (int, float)) else (0.045 if split == "char" else 0.07)) \
+                + ENTER_DUR.get(eff_enter, 0.0)
         self.enter = None
 
     def _make_list_children(self, opt):
@@ -581,6 +588,9 @@ class Elem(object):
                 w, h = self._measure_lines([ch.content], self.size)
                 ch.mw = w + glyph_pad
                 ch.mh = h
+        eff_enter = self.enter or "slide"
+        if self.children:
+            self.done = self.children[-1].at + ENTER_DUR.get(eff_enter, 0.0)
         self.enter = None
 
     # ---------------- 入场 / 退场 ----------------
