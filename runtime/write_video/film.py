@@ -766,7 +766,8 @@ class Elem(object):
                 sx *= w
                 sy *= w
         if self.kind in ("text", "counter"):
-            self._draw_text(img, lt, ss, a, dx, dy, sx, sy)
+            if not self.children:
+                self._draw_text(img, lt, ss, a, dx, dy, sx, sy)
         elif self.kind == "image":
             self._draw_image(img, lt, ss, a, dx, dy, sx, sy)
         elif self.kind == "draw":
