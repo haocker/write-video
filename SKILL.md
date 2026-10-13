@@ -51,6 +51,7 @@ description: 用代码编排短视频/MP4（code-to-video）的 Skill。策划�
 |---|---|
 | 策划：要定的事、分镜写法、镜头菜单、节奏与文案 | `knowledge/planning.md` |
 | 编排：脚本约定、API 速查、检查循环、自绘菜单、常见坑 | `knowledge/compose.md` |
+| 导演纪律：分镜硬规矩、动效分配、色板、版面焦点、节奏配乐、审片 | `knowledge/craft.md` |
 
 ## 目录
 

@@ -371,6 +371,8 @@ def shot(c, t):
 
 ## 交付前自检
 
+> 色板一致性、一屏一个焦点、数字口径、审片纪律，见 `knowledge/craft.md`（蒸馏自 huashu-art-motion）。
+
 - lint 无 error；warn 要么修要么记录保留理由；info 看一眼（阅读时间不足、自动缩小等）。
 - flicker 没有未解释的事件；有事件先看 `*.flicker.png` 条带定位（突然出现/消失？入场透明度错误？）。
 - 逐行对照分镜：场景齐全、文案逐字、命中时刻对、招牌到位。
