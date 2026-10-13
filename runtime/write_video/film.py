@@ -778,7 +778,6 @@ class Elem(object):
             ch.draw(img, t, ss, palette, extra_dy=extra_dy, extra_a=a)
 
     def _paste(self, img, ss, rgba, cx, cy, a, sx, sy):
-        key = None
         if sx != 1.0 or sy != 1.0:
             w2 = max(1, int(round(rgba.width * sx)))
             h2 = max(1, int(round(rgba.height * sy)))
@@ -801,6 +800,14 @@ class Elem(object):
         py = int(round(cy * ss - rgba.height / 2))
         img.paste(rgba, (px, py), rgba)
 
+    def _text_left(self, dx=0.0):
+        """文本 raster 左缘的成片 x（align 感知：left=锚点，right=锚点-宽，center=锚点-半宽）。"""
+        if self.align == "left":
+            return self.cx + dx
+        if self.align == "right":
+            return self.cx + dx - self.mw
+        return self.cx + dx - self.mw / 2
+
     def _draw_text(self, img, t, ss, a, dx, dy, sx, sy):
         if self.kind == "counter":
             txt = self._fmt_value(self._counter_value(t))
@@ -809,7 +816,7 @@ class Elem(object):
             if r is None:
                 r = self._text_raster(ss, lines=[txt], cache_key=key)
             rgba, pad_px, mw_px, mh_px = r
-            self._paste(img, ss, rgba, self.cx + dx, self.cy + dy, a, sx, sy)
+            self._paste(img, ss, rgba, self._text_left(dx) + self.mw / 2, self.cy + dy, a, sx, sy)
             return
         icon = getattr(self, "_icon", None)
         rgba, pad_px, mw_px, mh_px = self._text_raster(ss, icon=icon)
@@ -819,8 +826,8 @@ class Elem(object):
             if k < plain_len:
                 rw = self._reveal_px(k, ss)
                 rgba = rgba.crop((0, 0, min(rgba.width, int(math.ceil(self._text_raster_pad(ss) + rw))), rgba.height))
-                # 左对齐粘贴（打字中不平移）
-                px = int(round((self.cx + dx - self.mw / 2) * ss - self._text_raster_pad(ss)))
+                # 打字中从左缘固定位置揭示（不平移），位置按 align 算
+                px = int(round(self._text_left(dx) * ss - self._text_raster_pad(ss)))
                 py = int(round((self.cy + dy) * ss - rgba.height / 2))
                 if a < 0.996:
                     key2 = (id(rgba), int(a * 32))
@@ -833,13 +840,13 @@ class Elem(object):
                     rgba = rr
                 img.paste(rgba, (px, py), rgba)
                 # 光标
-                cur_x = self.cx + dx - self.mw / 2 + rw / ss
+                cur_x = self._text_left(dx) + rw / ss
                 if (t * 2.0) % 1.0 < 0.55:
                     c2 = Canvas(img, ss=ss, width=self.film.width, height=self.film.height)
                     c2.rect(cur_x, self.cy + dy - self.size * 0.48, max(2.0, 3.0), self.size * 0.96,
                             fill="accent", alpha=a * 0.9)
                 return
-        self._paste(img, ss, rgba, self.cx + dx, self.cy + dy, a, sx, sy)
+        self._paste(img, ss, rgba, self._text_left(dx) + self.mw / 2, self.cy + dy, a, sx, sy)
 
     def _text_raster_pad(self, ss):
         return max(3.0, self.size * 0.24) * ss
