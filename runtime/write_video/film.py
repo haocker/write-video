@@ -1082,20 +1082,24 @@ class Elem(object):
                        ox=dx, oy=dy)
             self.fn(c, t)
             return
-        layer = Image.new("RGBA", img.size, (0, 0, 0, 0))
+        # 整屏自绘（带元素透明度 / 缩放）：在当前帧的不透明副本上绘制，
+        # 内部半透明 ink 以帧内容为底正常混合；再与原帧按元素透明度 a 混合。
+        # （此前用透明 RGBA 层起步，半透明 ink 会被"预乘黑"压暗：淡出期间
+        #   光环变深环、蒸汽变灰、淡色笔触发闷。）
+        layer = img.copy().convert("RGBA")
         c = Canvas(layer, ss=ss, width=self.film.width, height=self.film.height, ctx=ctx)
         self.fn(c, t)
         if sx != 1.0 or sy != 1.0:
             w2 = max(1, int(round(layer.width * sx)))
             h2 = max(1, int(round(layer.height * sy)))
             layer = layer.resize((w2, h2), Image.BILINEAR)
-        if a < 0.996:
-            alpha = layer.getchannel("A").point(lambda v: int(v * a))
-            layer = layer.copy()
-            layer.putalpha(alpha)
+        base = img.copy().convert("RGBA")
+        if base.size != layer.size:
+            base = base.resize(layer.size, Image.BILINEAR)
+        blended = Image.blend(base, layer, clamp(a, 0.0, 1.0))
         px = int(round(dx * ss - (layer.width - img.width) / 2))
         py = int(round(dy * ss - (layer.height - img.height) / 2))
-        img.paste(layer, (px, py), layer)
+        img.paste(blended.convert(img.mode), (px, py))
 
     def _draw_burst(self, img, t, ss, palette, a, dx, dy):
         age = t - 0.0
