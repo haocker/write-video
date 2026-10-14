@@ -63,7 +63,8 @@ if __name__ == "__main__":
 |---|---|
 | `s.text(文字, at=, style=, enter=, size=, color=, bold=, font=, x=, y=, pos=, split=, stagger=, line_gap=, align=)` | `**强调**` → 强调色；`\n` 分行；`font="mono"` 等宽；超宽自动缩小（记 info）。注意：等宽字体不含中文，代码块中的中文必须用 `font="sans"` 单独显示（见常见坑 #12） |
 | `s.text(…)` 的 `split` 取 `"char"/"word"/"line"`：逐字/逐词/逐行入场（word：拉丁按词、中文按字、标点并入前一词；空格占据节拍） |
-| `s.list(条目数组, at=, icon=, stagger=, size=, gap=)` | 逐条滑入；icon：check / circle-check / star / rocket / arrow / dot / warn / heart / plus / cross / spark |
+| `s.list(条目数组, at=, icon=, stagger=, size=, gap=)` | 逐条滑入；icon：内置 check / circle-check / star / rocket / arrow / dot / warn / heart / plus / cross / spark，或 `tabler:名字`（Tabler 图标 5070 个，见下） |
+| **图标系统（Tabler）** | `wv.icons.char("brand-github")` 按名取字符；名字表见仓库 `docs/icons.html`（可搜索）。`icon="tabler:名字"` 或已知 tabler 名直接可用；未知名 lint warn。`s.text(..., font="tabler")` 画大图标（纯图标元素，中文另起元素）。绘制内 `c.text(字符, x, y, size, col, alpha=, font="tabler")` |
 | `s.counter(从, 到, at=, dur=1.0, format="%d", size=, pos=)` | 滚动 + 自动滴答与叮；`.done` 是结束秒 |
 | `s.image(路径, at=, width=, height=, radius=, title=, caption=, shadow=, bg=, border=, zoom=)` | 只给宽或高则等比。**卡片词**：`title` 加窗口标题栏（卡内顶端，三点+标题+分隔线，自动配卡面）、`caption` 卡外下方说明（caption 样式）、`bg`/`border` 卡面与描边（`True` = 主题色）、`shadow` 柔和投影（默认：卡片与小图开、四角透明图与全屏图自动关）。`zoom` 卡内推近：数值或关键帧 `[(本地秒, 倍数, cx, cy[, 缓动]), ...]`（cx/cy 是 0~1 画面坐标）；占画面 ≥40% 且停留 ≥3s 时**默认自动 Ken Burns**（1.0→1.07 慢推，写了 zoom 则关闭） |
 | `s.draw(fn, at=, width=, height=, bg=, border=, radius=, x=, y=)` | 给了 width/height 是方框元素（参与排版、自动裁剪）；不给是整屏画布 |

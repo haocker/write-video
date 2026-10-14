@@ -74,6 +74,9 @@ _CANDIDATES = {
     "mono_bold": [
         _bundled("WenQuanYiMicroHeiMono.ttf"),  # 同 mono；粗细由描边承担
     ],
+    "tabler": [
+        _bundled("TablerIcons.ttf"),            # Tabler 图标（PUA 码位，经 icons.py 按名引用）
+    ],
 }
 
 _ENV = {

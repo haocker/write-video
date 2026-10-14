@@ -13,6 +13,7 @@ from PIL import Image, ImageDraw, ImageFilter
 
 from . import canvas as _cv
 from . import fonts as _fonts
+from . import icons as _icons
 from .canvas import Canvas, ease, rand, spring, decay, wiggle, parse_color, clamp, lerp
 
 # ================================================================ 常量
@@ -69,6 +70,20 @@ ICON_GLYPHS = {
 }
 
 _EMPH_RE = re.compile(r"\*\*(.+?)\*\*")
+
+
+def _icon_glyph(icon):
+    """icon 选项解析 -> (字符, 是否 tabler 图标字体)。
+
+    内置字形名(check/cross/...) -> 内置字符；"tabler:名字" 或已知 tabler 图标名
+    -> Tabler 字符；单字符按字面量；其余按原字符串（调用方决定是否 lint）。
+    """
+    if icon in ICON_GLYPHS:
+        return ICON_GLYPHS[icon], False
+    name = icon[7:] if icon.startswith("tabler:") else icon
+    if re.fullmatch(r"[a-z0-9][a-z0-9-]*", name) and _icons.has(name):
+        return _icons.char(name), True
+    return icon, False
 
 _BASE_OPTS = {"at", "out", "style", "enter", "size", "color", "bold", "font", "x", "y",
               "pos", "opacity", "sfx", "align", "line_gap"}
@@ -289,9 +304,15 @@ class Elem(object):
         rows_wh = []
         glyph_pad = 0.0
         if icon:
-            f = _fonts.load(self.font or ("sans_bold" if self.bold else "sans"), max(1, int(self.size)))
-            glyph = ICON_GLYPHS.get(icon, icon)
+            glyph, is_t = _icon_glyph(icon)
+            f = (_icons.font(int(self.size)) if is_t else
+                 _fonts.load(self.font or ("sans_bold" if self.bold else "sans"),
+                             max(1, int(self.size))))
             glyph_pad = f.getlength(glyph) + self.size * 0.55
+            if not is_t and icon not in ICON_GLYPHS:
+                self.film._lint_add("warn", self.at,
+                                    "未知图标 %r（内置字形名或 tabler:名字，tabler 共 %d 个）"
+                                    % (icon, len(_icons.names())))
         for it in self.items:
             w, h = self._measure_lines([it], self.size)
             rows_wh.append((w + glyph_pad, h))
@@ -565,7 +586,9 @@ class Elem(object):
         f = self._font_at(self.size, 1.0)
         glyph_pad = 0.0
         if icon:
-            glyph_pad = f.getlength(ICON_GLYPHS.get(icon, icon)) + self.size * 0.55
+            glyph, is_t = _icon_glyph(icon)
+            glyph_pad = ((_icons.font(int(self.size)) if is_t else f)
+                         .getlength(glyph) + self.size * 0.55)
         for i, it in enumerate(self.items):
             ch = Elem(self.film, "text", it, co, self.scene, internal=True)
             ch.parent = self
@@ -684,12 +707,14 @@ class Elem(object):
         col_emph = parse_color("emph", pal)
         col_accent = parse_color("accent", pal)
         glyph = None
+        is_t = False
         if icon:
-            glyph = ICON_GLYPHS.get(icon, icon)
+            glyph, is_t = _icon_glyph(icon)
         if r is None:
             px = max(1, int(round(size * ss)))
             kind = self.font or ("sans_bold" if self.bold else "sans")
             f = _fonts.load(kind, px)
+            gf = _icons.font(px) if is_t else f
             lh = float(sum(f.getmetrics()))
             step = max(lh, px * self.line_gap)
             pad = max(3.0, size * 0.24) * ss
@@ -697,7 +722,7 @@ class Elem(object):
             widths = []
             glyph_w = 0.0
             if glyph:
-                glyph_w = f.getlength(glyph) + size * 0.55 * ss
+                glyph_w = gf.getlength(glyph) + size * 0.55 * ss
             for i, runs in enumerate(runs_lines):
                 w = sum(f.getlength(txt) for txt, ck in runs)
                 if i == 0 and glyph:
@@ -717,7 +742,7 @@ class Elem(object):
                     x += mw - widths[i]
                 y = pad + i * step
                 if i == 0 and glyph:
-                    d.text((int(round(x)), int(round(y))), glyph, font=f, fill=col_accent + (255,))
+                    d.text((int(round(x)), int(round(y))), glyph, font=gf, fill=col_accent + (255,))
                     x += glyph_w
                 for txt, ck in runs:
                     if not txt:
