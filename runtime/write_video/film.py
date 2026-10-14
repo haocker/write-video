@@ -875,6 +875,8 @@ class Elem(object):
                     c2 = Canvas(img, ss=ss, width=self.film.width, height=self.film.height)
                     c2.rect(cur_x, self.cy + dy - self.size * 0.48, max(2.0, 3.0), self.size * 0.96,
                             fill="accent", alpha=a * 0.9)
+                    if hasattr(c2, "flush"):
+                        c2.flush()
                 return
         self._paste(img, ss, rgba, self._text_left(dx) + self.mw / 2, self.cy + dy, a, sx, sy)
 
@@ -1101,6 +1103,8 @@ class Elem(object):
                 c.rect(0, 0, self.w, self.h, outline=("line" if self.border is True else self.border),
                        width=2, radius=self.radius)
             self.fn(c, t)
+            if hasattr(c, "flush"):
+                c.flush()
             if sx != 1.0 or sy != 1.0:
                 w2 = max(1, int(round(layer.width * sx)))
                 h2 = max(1, int(round(layer.height * sy)))
@@ -1118,6 +1122,8 @@ class Elem(object):
             c = Canvas(img, ss=ss, width=self.film.width, height=self.film.height, ctx=ctx,
                        ox=dx, oy=dy)
             self.fn(c, t)
+            if hasattr(c, "flush"):
+                c.flush()
             return
         # 整屏自绘（带元素透明度 / 缩放）：在当前帧的不透明副本上绘制，
         # 内部半透明 ink 以帧内容为底正常混合；再与原帧按元素透明度 a 混合。
@@ -1126,6 +1132,8 @@ class Elem(object):
         layer = img.copy().convert("RGBA")
         c = Canvas(layer, ss=ss, width=self.film.width, height=self.film.height, ctx=ctx)
         self.fn(c, t)
+        if hasattr(c, "flush"):
+            c.flush()
         if sx != 1.0 or sy != 1.0:
             w2 = max(1, int(round(layer.width * sx)))
             h2 = max(1, int(round(layer.height * sy)))

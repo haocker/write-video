@@ -7,6 +7,7 @@
 自绘回调签名：fn(c, t)，t 为元素本地秒（= 全局秒 - 元素 at）。
 """
 import math
+import os
 
 import numpy as np
 import skia
@@ -143,6 +144,18 @@ def parse_color(v, palette=None):
 
 # ------------------------------------------------------------ 位图缓存
 
+# skia 抗锯齿覆盖层：曲线类图元（polygon/circle/ellipse/arc）画到一块帧级复用的
+# 透明覆盖层上，flush 时按 alpha 合成回 PIL 图层；矩形/线/文字仍走 PIL（快）。
+try:
+    import skia as _skia_mod
+    import numpy as _sk_np
+    _SK_OK = True
+except Exception:
+    _SK_OK = False
+
+_SK_SCRATCH = {"surface": None, "arr": None, "w": 0, "h": 0}
+
+
 class _DictCap(dict):
     def __init__(self, cap=256):
         dict.__init__(self)
@@ -270,6 +283,10 @@ class Canvas(object):
         self.ox = float(ox)
         self.oy = float(oy)
         self._d = draw if draw is not None else ImageDraw.Draw(img, "RGBA")
+        self._skc = None
+        self._sk_dirty = False
+        self._sk_bbox = None
+        self._aa = os.environ.get("WV_AA", "1") != "0"
 
     # ---------- 内部 ----------
     def _palette(self):
@@ -289,14 +306,83 @@ class Canvas(object):
         return int(round((v + self.oy) * self.ss))
 
     def _box2(self, x, y, w, h):
-        return [self._ix(x), self._iy(y), self._ix(x + w) - 1, self._iy(y + h) - 1]
+        # 亚像素宽/高取整后可能 x1 < x0（进度条起步、easeOutBack 起步等），钳到 1px
+        x0, y0, x1, y1 = self._ix(x), self._iy(y), self._ix(x + w), self._iy(y + h)
+        return [x0, y0, max(x1 - 1, x0), max(y1 - 1, y0)]
 
     def _lw(self, width):
         return max(1, int(round(width * self.ss)))
 
+    # ---------- skia 抗锯齿覆盖层 ----------
+    def _sk_ctx(self):
+        """惰性取 skia 覆盖层画布（帧级复用，acquire 时清空）。"""
+        if self._skc is not None:
+            return self._skc
+        if not self._aa or not _SK_OK:
+            return None
+        w_px, h_px = int(round(self.width * self.ss)), int(round(self.height * self.ss))
+        if not _SK_SCRATCH["surface"] or _SK_SCRATCH["w"] != w_px or _SK_SCRATCH["h"] != h_px:
+            info = _skia_mod.ImageInfo.Make(w_px, h_px, _skia_mod.kRGBA_8888_ColorType,
+                                            _skia_mod.kUnpremul_AlphaType)
+            arr = _sk_np.zeros((h_px, w_px, 4), dtype=_sk_np.uint8)
+            surf = _skia_mod.Surface.MakeRasterDirect(info, arr, arr.strides[0])
+            if surf is None:
+                return None
+            _SK_SCRATCH.update(surface=surf, arr=arr, w=w_px, h=h_px)
+        else:
+            _SK_SCRATCH["arr"][:] = 0
+        self._skc = _SK_SCRATCH["surface"].getCanvas()
+        self._sk_dirty = True
+        self._sk_bbox = None
+        return self._skc
+
+    def _sk_paint(self, col, alpha, width=0.0, stroke=False):
+        r, g, b = parse_color(col, self._palette())
+        p = _skia_mod.Paint(AntiAlias=True)
+        p.setColor(_skia_mod.Color(r, g, b, int(round(clamp(alpha, 0.0, 1.0) * 255))))
+        if stroke:
+            p.setStyle(_skia_mod.Paint.kStroke_Style)
+            p.setStrokeWidth(self._lw(width))
+        else:
+            p.setStyle(_skia_mod.Paint.kFill_Style)
+        return p
+
+    def _sk_touch(self, x0, y0, x1, y1):
+        """记录脏区（设计像素，含描边余量）。"""
+        if self._sk_bbox is None:
+            self._sk_bbox = [x0 - 24, y0 - 24, x1 + 24, y1 + 24]
+        else:
+            b = self._sk_bbox
+            b[0], b[1] = min(b[0], x0 - 24), min(b[1], y0 - 24)
+            b[2], b[3] = max(b[2], x1 + 24), max(b[3], y1 + 24)
+
+    def flush(self):
+        """把 skia 覆盖层的脏区按 alpha 合成回 PIL 图层（draw 回调结束时调用）。"""
+        if self._skc is not None and self._sk_dirty and _SK_OK and self._sk_bbox:
+            w_px, h_px = _SK_SCRATCH["w"], _SK_SCRATCH["h"]
+            x0 = max(0, int(self._sk_bbox[0] * self.ss)); y0 = max(0, int(self._sk_bbox[1] * self.ss))
+            x1 = min(w_px, int(self._sk_bbox[2] * self.ss) + 1)
+            y1 = min(h_px, int(self._sk_bbox[3] * self.ss) + 1)
+            if x1 > x0 and y1 > y0:
+                pil = Image.frombuffer("RGBA", (w_px, h_px), _SK_SCRATCH["arr"],
+                                       "raw", "RGBA", 0, 1).crop((x0, y0, x1, y1))
+                self.img.paste(pil, (x0, y0), pil)
+                _SK_SCRATCH["arr"][y0:y1, x0:x1] = 0
+        self._skc = None
+        self._sk_dirty = False
+        self._sk_bbox = None
+
+    def _pil_first(self):
+        """保序：skia 内容先落地，PIL 图元再画。"""
+        if self._skc is not None:
+            self.flush()
+
     # ---------- 基础图元 ----------
     def rect(self, x, y, w, h, fill=None, outline=None, width=1.0, radius=0, alpha=1.0):
-        """矩形（x,y = 左上角）。radius>0 为圆角。"""
+        self._pil_first()
+        """矩形（x,y = 左上角）。radius>0 为圆角。w/h <= 0 跳过（空进度条等语义）。"""
+        if w <= 0 or h <= 0:
+            return
         box = self._box2(x, y, w, h)
         f = self._fill(fill, alpha)
         o = self._fill(outline, alpha)
@@ -307,9 +393,11 @@ class Canvas(object):
                 self._d.rectangle(box, fill=f, outline=o, width=self._lw(width))
 
     def line(self, x1, y1, x2, y2, color="fg", width=2.0, alpha=1.0):
+        self._pil_first()
         self._d.line([self._ix(x1), self._iy(y1), self._ix(x2), self._iy(y2)], fill=self._fill(color, alpha), width=self._lw(width))
 
     def lines(self, pts, color="fg", width=2.0, alpha=1.0):
+        self._pil_first()
         if len(pts) < 2:
             return
         pix = [(self._ix(px), self._iy(py)) for px, py in pts]
@@ -317,6 +405,21 @@ class Canvas(object):
 
     def polygon(self, pts, fill=None, outline=None, width=2.0, alpha=1.0):
         if len(pts) < 2:
+            return
+        skc = self._sk_ctx()
+        if skc is not None:
+            pix = [(self._ix(px), self._iy(py)) for px, py in pts]
+            path = _skia_mod.Path()
+            path.moveTo(pix[0][0], pix[0][1])
+            for px, py in pix[1:]:
+                path.lineTo(px, py)
+            path.close()
+            xs, ys = [p[0] for p in pix], [p[1] for p in pix]
+            self._sk_touch(min(xs), min(ys), max(xs), max(ys))
+            if fill is not None:
+                skc.drawPath(path, self._sk_paint(fill, alpha))
+            if outline is not None:
+                skc.drawPath(path, self._sk_paint(outline, alpha, width, stroke=True))
             return
         pix = [(self._ix(px), self._iy(py)) for px, py in pts]
         f = self._fill(fill, alpha)
@@ -329,6 +432,16 @@ class Canvas(object):
         self.ellipse(x, y, r, r, fill=fill, outline=outline, width=width, alpha=alpha)
 
     def ellipse(self, x, y, rx, ry, fill=None, outline=None, width=2.0, alpha=1.0):
+        skc = self._sk_ctx()
+        if skc is not None:
+            box = _skia_mod.Rect.MakeLTRB(self._ix(x - rx), self._iy(y - ry),
+                                          self._ix(x + rx), self._iy(y + ry))
+            self._sk_touch(box.left(), box.top(), box.right(), box.bottom())
+            if fill is not None:
+                skc.drawOval(box, self._sk_paint(fill, alpha))
+            if outline is not None:
+                skc.drawOval(box, self._sk_paint(outline, alpha, width, stroke=True))
+            return
         box = [self._ix(x - rx), self._iy(y - ry), self._ix(x + rx) - 1, self._iy(y + ry) - 1]
         f = self._fill(fill, alpha)
         o = self._fill(outline, alpha)
@@ -339,6 +452,14 @@ class Canvas(object):
 
     def arc(self, x, y, r, start, end, color="fg", width=3.0, alpha=1.0):
         """圆弧：0° = 三点钟方向，角度沿屏幕顺时针增加。"""
+        skc = self._sk_ctx()
+        if skc is not None:
+            box = _skia_mod.Rect.MakeLTRB(self._ix(x - r), self._iy(y - r),
+                                          self._ix(x + r), self._iy(y + r))
+            self._sk_touch(box.left(), box.top(), box.right(), box.bottom())
+            skc.drawArc(box, start, end, useCenter=False,
+                        paint=self._sk_paint(color, alpha, width, stroke=True))
+            return
         box = [self._ix(x - r), self._iy(y - r), self._ix(x + r) - 1, self._iy(y + r) - 1]
         self._d.arc(box, start, end, fill=self._fill(color, alpha), width=self._lw(width))
 
@@ -347,6 +468,7 @@ class Canvas(object):
              alpha=1.0, font=None, line_gap=1.35, max_width=None):
         """文字（可多行，\n 分行）。x,y 锚点：align 决定水平锚（left/center/right）。
         返回排版尺寸 (w,h)（设计像素）。"""
+        self._pil_first()
         s = str(s).replace("\r", "")
         lines = s.split("\n")
         px = max(1, int(round(size * self.ss)))
@@ -395,6 +517,7 @@ class Canvas(object):
 
     # ---------- 图片 / 光晕 ----------
     def image(self, path, x, y, w=None, h=None, alpha=1.0, radius=0, anchor="center"):
+        self._pil_first()
         """贴图。x,y 默认是中心点（anchor='topleft' 时是左上角）。返回尺寸 (w,h)。"""
         im = load_image(path)
         iw, ih = im.size
@@ -420,6 +543,7 @@ class Canvas(object):
         self.img.paste(spr, (self._ix(x - r), self._iy(y - r)), spr)
 
     def paste_full(self, im, alpha=1.0):
+        self._pil_first()
         """贴一张与画布同比例的整幅图（自动按超采样 ss 缩放到画幅，铺满全画布）。"""
         w_px = max(1, int(round(self.width * self.ss)))
         h_px = max(1, int(round(self.height * self.ss)))
@@ -484,10 +608,16 @@ class Canvas(object):
                 skia.Point(cx, cy), max_r, sk_colors, sk_pos, skia.TileMode.kClamp)
         elif direction == "vertical":
             shader = skia.GradientShader.MakeLinear(
-                skia.Point(0, 0), skia.Point(0, h_px), sk_colors, sk_pos, skia.TileMode.kClamp)
+                [skia.Point(0, 0), skia.Point(0, h_px)],
+                [skia.Color(r, g, b, int(round(255 * clamp(alpha, 0, 1))))
+                 for _, (r, g, b) in stops],
+                sk_pos, skia.TileMode.kClamp)
         else:
             shader = skia.GradientShader.MakeLinear(
-                skia.Point(0, 0), skia.Point(w_px, 0), sk_colors, sk_pos, skia.TileMode.kClamp)
+                [skia.Point(0, 0), skia.Point(w_px, 0)],
+                [skia.Color(r, g, b, int(round(255 * clamp(alpha, 0, 1))))
+                 for _, (r, g, b) in stops],
+                sk_pos, skia.TileMode.kClamp)
 
         p = skia.Paint()
         p.setShader(shader)
