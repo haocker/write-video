@@ -59,17 +59,17 @@ def _bundled(name):
 
 _CANDIDATES = {
     "sans": [
-        _bundled("站酷庆科黄油体.ttf"),
-        _bundled("站酷文艺体.ttf"),
-        _bundled("站酷快乐体 开源版.ttf"),
-        _bundled("站酷高端黑.ttf"),
-        _bundled("站酷酷黑体.ttf"),
-        _bundled("站酷小薇LOGO体.otf"),
+        _bundled("ZCOOLQingkeHuangyou.ttf"),
+        _bundled("ZCOOLWenyi.ttf"),
+        _bundled("ZCOOLKuaile.ttf"),
+        _bundled("ZCOOLGaoduanhei.ttf"),
+        _bundled("ZCOOLKuhei.ttf"),
+        _bundled("ZCOOLXiaoweiLogo.otf"),
     ],
     "sans_bold": [
-        _bundled("站酷高端黑.ttf"),
-        _bundled("站酷庆科黄油体.ttf"),
-        _bundled("站酷酷黑体.ttf"),
+        _bundled("ZCOOLGaoduanhei.ttf"),
+        _bundled("ZCOOLQingkeHuangyou.ttf"),
+        _bundled("ZCOOLKuhei.ttf"),
     ],
     "mono": [
         _bundled("WenQuanYiMicroHeiMono.ttf"),  # 文泉驿等宽微米黑（CJK 等宽，20932 字形）
