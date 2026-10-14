@@ -628,9 +628,14 @@ class Elem(object):
         if en == "slam":
             if t < -0.30:
                 return None
+            # 起始倍率按文本宽度封顶：宽文本落定前横向不出画幅，窄文本保持 2.6 倍砸落
+            s0 = 2.6
+            if self.mw:
+                s0 = min(s0, self.film.width * 0.92 / self.mw)
+            s0 = max(1.0, s0)
             if t < 0:
                 p = (t + 0.30) / 0.30
-                return {"a": min(1.0, p * 5), "dx": 0.0, "dy": 0.0, "s": lerp(2.6, 1.0, ease("easeInCubic", p))}
+                return {"a": min(1.0, p * 5), "dx": 0.0, "dy": 0.0, "s": lerp(s0, 1.0, ease("easeInCubic", p))}
             k = 0.16 * decay(t, 3.4, 8.5)
             return {"a": 1.0, "dx": 0.0, "dy": 0.0, "s": 1.0, "sx": 1.0 + k, "sy": 1.0 - k}
         if en == "type":
