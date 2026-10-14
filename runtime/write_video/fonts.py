@@ -21,9 +21,17 @@ _LATIN_CHAR = "A"
 def _supports_cjk(path):
     """检测字体是否含真实 CJK 字形（排除 .notdef 豆腐块）。
 
-    原理：Latin-only 字体对 CJK 字符只渲染 .notdef 备用字形（豆腐块），
-    其宽度与拉丁字符一致；真实 CJK 字形宽度是拉丁的 1.5~1.7 倍。
+    优先 fontTools 查 cmap（准确，能识别宽拉丁设计的展示字体）；
+    无 fontTools 时退回宽度启发式：真实 CJK 字形宽度约为拉丁的 1.5~1.7 倍。
     """
+    try:
+        from fontTools.ttLib import TTFont
+        f = TTFont(path, fontNumber=0, lazy=True)
+        return 0x4E2D in f.getBestCmap()  # "中"
+    except ImportError:
+        pass
+    except Exception:
+        pass
     try:
         f = ImageFont.truetype(path, 48)
         m_latin = f.getmask(_LATIN_CHAR)
@@ -51,8 +59,9 @@ def _bundled(name):
 
 _CANDIDATES = {
     "sans": [
-        _bundled("LXGWWenKai-Regular.ttf"),
-        _bundled("Inter-Regular.ttf"),
+        _bundled("站酷庆科黄油体.ttf"),
+        _bundled("站酷文艺体.ttf"),
+        _bundled("站酷快乐体 开源版.ttf"),
         "/usr/share/fonts/truetype/wqy/wqy-microhei.ttc",
         "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc",
         "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
@@ -60,17 +69,17 @@ _CANDIDATES = {
         "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
     ],
     "sans_bold": [
-        _bundled("Inter-Bold.ttf"),
+        _bundled("站酷高端黑.ttf"),
+        _bundled("站酷庆科黄油体.ttf"),
         "/usr/share/fonts/truetype/wqy/wqy-microhei.ttc",
         "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc",
         "/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc",
         "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
     ],
     "mono": [
-        (_bundled("SarasaMonoSC-Regular.ttf"), 0),
         (_bundled("JetBrainsMono-Regular.ttf"), 0),
-        "/usr/share/fonts/truetype/wqy/wqy-microhei.ttc",
         ("/usr/share/fonts/truetype/wqy/wqy-microhei.ttc", 1),  # WenQuanYi Micro Hei Mono (CJK 等宽)
+        "/usr/share/fonts/truetype/wqy/wqy-microhei.ttc",
         "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc",
         "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf",
         "/usr/share/fonts/opentype/noto/NotoSansMono-Regular.ttf",
