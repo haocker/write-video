@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-"""write-video — 开源字体发现与缓存。
+"""write-video — 捆绑字体发现与缓存。
 
-仅收录 SIL OFL / GPL+font-exception 无版权可商用字体。
-优先用环境变量指定，其次按操作系统搜索已安装字体：
+仅收录 SIL OFL / GPL+font-exception 无版权可商用字体，全部随技能捆绑
+（不依赖系统安装字体）。需要覆盖时用环境变量指定，优先级最高：
 
     WV_FONT_SANS      正文字体（支持中文）
     WV_FONT_SANS_BOLD 粗体
@@ -62,34 +62,20 @@ _CANDIDATES = {
         _bundled("站酷庆科黄油体.ttf"),
         _bundled("站酷文艺体.ttf"),
         _bundled("站酷快乐体 开源版.ttf"),
-        "/usr/share/fonts/truetype/wqy/wqy-microhei.ttc",
-        "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc",
-        "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
-        "/usr/share/fonts/opentype/noto/NotoSansCJKsc-Regular.otf",
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        _bundled("站酷高端黑.ttf"),
+        _bundled("站酷酷黑体.ttf"),
+        _bundled("站酷小薇LOGO体.otf"),
     ],
     "sans_bold": [
         _bundled("站酷高端黑.ttf"),
         _bundled("站酷庆科黄油体.ttf"),
-        "/usr/share/fonts/truetype/wqy/wqy-microhei.ttc",
-        "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc",
-        "/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc",
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+        _bundled("站酷酷黑体.ttf"),
     ],
     "mono": [
-        (_bundled("JetBrainsMono-Regular.ttf"), 0),
-        ("/usr/share/fonts/truetype/wqy/wqy-microhei.ttc", 1),  # WenQuanYi Micro Hei Mono (CJK 等宽)
-        "/usr/share/fonts/truetype/wqy/wqy-microhei.ttc",
-        "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc",
-        "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf",
-        "/usr/share/fonts/opentype/noto/NotoSansMono-Regular.ttf",
+        _bundled("WenQuanYiMicroHeiMono.ttf"),  # 文泉驿等宽微米黑（CJK 等宽，20932 字形）
     ],
     "mono_bold": [
-        (_bundled("JetBrainsMono-Bold.ttf"), 0),
-        ("/usr/share/fonts/truetype/wqy/wqy-microhei.ttc", 1),
-        "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc",
-        "/usr/share/fonts/truetype/dejavu/DejaVuSansMono-Bold.ttf",
-        "/usr/share/fonts/opentype/noto/NotoSansMono-Bold.ttf",
+        _bundled("WenQuanYiMicroHeiMono.ttf"),  # 同 mono；粗细由描边承担
     ],
 }
 
