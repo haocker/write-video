@@ -59,17 +59,14 @@ def _bundled(name):
 
 _CANDIDATES = {
     "sans": [
-        _bundled("ZCOOLQingkeHuangyou.ttf"),
-        _bundled("ZCOOLWenyi.ttf"),
-        _bundled("ZCOOLKuaile.ttf"),
-        _bundled("ZCOOLGaoduanhei.ttf"),
-        _bundled("ZCOOLKuhei.ttf"),
-        _bundled("ZCOOLXiaoweiLogo.otf"),
+        _bundled("ZiTiQuanWeiJunHei.ttf"),   # 字体圈伟君黑 W1（常规黑，正文）
+        _bundled("YouSheBiaoTiHei.ttf"),     # 优设标题黑（重标题）
+        _bundled("ZiZhiQuXiMaiTi.ttf"),      # 字制区喜脉体（装饰）
     ],
     "sans_bold": [
-        _bundled("ZCOOLGaoduanhei.ttf"),
-        _bundled("ZCOOLQingkeHuangyou.ttf"),
-        _bundled("ZCOOLKuhei.ttf"),
+        _bundled("YouSheBiaoTiHei.ttf"),     # 优设标题黑（重标题）
+        _bundled("ZiTiQuanWeiJunHei.ttf"),
+        _bundled("ZiZhiQuXiMaiTi.ttf"),
     ],
     "mono": [
         _bundled("WenQuanYiMicroHeiMono.ttf"),  # 文泉驿等宽微米黑（CJK 等宽，20932 字形）
