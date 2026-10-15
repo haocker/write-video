@@ -243,6 +243,14 @@ s.text("那句代码", at=a.word("代码"))            # 精确到词（词时�
 `text(s,x,y,size=,color=,bold=,align=,valign=,alpha=,font=,line_gap=)`、`text_width(s,size,...)`、
 `image(path,x,y,w=,h=,alpha=,radius=)`、`glow(x,y,r,color=,alpha=)`。
 
+**手绘三参数**（`lines` / `polygon` 通用，2D 动漫/手绘感的核心）：
+
+- `curve=True` — Catmull-Rom 过点样条（skia cubicTo），折线变圆润曲线，放大无棱角。
+- `jitter=幅度(设计像素)` — 手绘抖动：点沿法向低频颤动 + 描边变宽压感（round cap 逐段调制），`seed` 固定形状。fill/outline 一致抖。
+- `smooth=` — 缺省跟随 `curve or jitter>0`；显式 `smooth=False` 得"抖而不圆"的机械手绘边（列车/楼群/机械体）。
+
+例：人物发丝 `c.lines(pts, width=2.0, curve=True, jitter=0.9, seed=43)`；城市天际线 `c.polygon(pts, fill=col, curve=False, jitter=1.4, smooth=False)`。
+
 装饰级效果（常用于全片层 `film.draw` 为每帧加质感）：
 
 - `gradient(x, y, w, h, colors, direction="radial", alpha=1.0)` — 渐变填充。
@@ -400,6 +408,8 @@ def shot(c, t):
 10. 单帧 PNG 已做加速；整片速度看报告的 `timings.frames`。
 11. 配音 mp3 手工替换后要删掉同名 `.json` 缓存（否则词时间还是旧的）；`wv.voice.tts()` 换参数时会自动重合成。
 12. **`font="mono"` 不含中文**：系统自带的等宽字体（DejaVu Sans Mono / Consolas / Menlo）均为纯拉丁字体，代码块里的中文注释、字符串会显示为豆腐块。做法：把中文从代码行拆出来，用 `font="sans"` 单独显示；或设环境变量 `WV_FONT_MONO` 指向含中文的等宽字体（如 Noto Sans Mono CJK）。
+13. **`cut` 场景的自绘要显式 `enter="none"`**：draw 元素默认继承样式的 `enter="fade"`（0.5s 淡入），切镜首帧只有主题底色 → 观感"切过去黑一下才出现内容"。正反打等硬切场景：`s.draw(fn, at=…, enter="none")`。fade/flash 转场的场景不用改（转场本身盖住淡入）。
+14. **闪烁误报两类**：① `cut` 切镜帧（runtime 已自动排除场景边界 ±1 帧）；② 高速平移物体（列车/ fast pan，平坦色块使运动补偿失败）——用 `film.flicker_exclude(t0, t1[, x, y, w, h])` 声明排除窗口，别为过关把运镜放慢。
 
 ## 性能（本机参考）
 
