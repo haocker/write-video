@@ -84,15 +84,18 @@ def pick_encoder(ffmpeg, verbose=False):
 
 
 def film_exclusions(film):
-    """闪烁检测的排除清单：全局时间窗口 + 元素区域快速窗口（slam 起跳急缩 / punch 命中急缩）。"""
+    """闪烁检测的排除清单：全局时间窗口 + 元素区域快速窗口（slam 起跳急缩 / punch 命中急缩）。
+    场景边界（含 cut 切镜）是合法的全帧/局部变化，排除切换后 1 帧 + 过渡时长。"""
     from .film import TRANS_DUR
     ex = []
+    step = 1.0 / max(film.fps, 1)
     for sc in film.scenes:
-        D = TRANS_DUR.get(sc.transition, 0.0)
-        if sc.prev is not None and D > 0:
+        if sc.prev is not None:
+            D = max(TRANS_DUR.get(sc.transition, 0.0), step)
             ex.append((sc.start, sc.start + D + 0.05))
     for item in (film._shake + film._shake_user):
         ex.append((item[0], item[0] + item[1] + 0.08))
+    ex.extend(getattr(film, "_flicker_ex", []))
     for sc in film.scenes:
         for el in sc.elements:
             if el.parent is not None or el.kind == "burst":

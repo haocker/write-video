@@ -1281,6 +1281,7 @@ class Film(object):
         self._sfx_user = []
         self._sfx_all = []
         self._shake_user = []
+        self._flicker_ex = []
         self._bg_cache = {}
         self._paste_cache = _cv._DictCap(512)
         self._zoom_cache = _cv._DictCap(48)
@@ -1340,8 +1341,16 @@ class Film(object):
 
     def shake(self, at, dur=0.25, amp=6.0):
         self._shake_user.append((float(at), float(dur), float(amp)))
+        self._prepared = False
 
-    def invalidate(self):
+    def flicker_exclude(self, t0, t1, x=None, y=None, w=None, h=None):
+        """声明"有意急变"窗口：闪烁检测跳过（高速平移物体、设计阶跃等）。
+        只给时间 → 全帧排除；给 x/y/w/h → 仅排除该区域。"""
+        if x is None:
+            self._flicker_ex.append((float(t0), float(t1)))
+        else:
+            self._flicker_ex.append({"t0": float(t0), "t1": float(t1), "x": float(x),
+                                     "y": float(y), "w": float(w), "h": float(h)})
         self._prepared = False
 
     # ---------------- 样式 / lint ----------------

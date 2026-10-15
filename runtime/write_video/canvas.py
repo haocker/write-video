@@ -484,35 +484,50 @@ class Canvas(object):
         out.append(pt(0) if closed else pts[-1])
         return out
 
+    def _dense(self, pts, closed):
+        """手绘分支的密集采样：按控制段长自适应 per（段长约 4px，保证变宽
+        描边的圆头胶囊相互重叠成连续线）。"""
+        n = len(pts)
+        m = n - 1 if not closed else n
+        total = 0.0
+        for i in range(m):
+            total += math.hypot(pts[(i + 1) % n][0] - pts[i][0],
+                                pts[(i + 1) % n][1] - pts[i][1])
+        avg = total / max(m, 1)
+        per = int(clamp(avg / 4.0, 8, 48))
+        return self._cr_sample(pts, closed, per=per)
+
     def _hand_stroke(self, skc, pix, col, alpha, width, jitter, seed, closed):
         """变宽描边：逐段 round cap 线段，宽随低频噪声起伏（手绘压感）。"""
         n = len(pix)
         if n < 2:
             return
         k = clamp(jitter / 2.0, 0.3, 1.5)
-        raw = [self._hand_noise(i * 3 + 7, seed) for i in range(n + 2)]
+        raw = [self._hand_noise(i, seed) for i in range(n + 4)]
         for i in range(n - 1 if not closed else n):
             x0, y0 = pix[i]
             x1, y1 = pix[(i + 1) % n]
-            s = (raw[i] + raw[i + 1] + raw[i + 2]) / 3.0
-            w = max(1.0, width * (1.0 + 0.5 * k * s))
+            s = (raw[i] + raw[i + 1] + raw[i + 2] + raw[i + 3]) / 4.0
+            w = max(1.0, width * (1.0 + 0.3 * k * s))
             p = self._sk_paint(col, alpha, w, stroke=True)
             p.setStrokeCap(_skia_mod.Paint.kRound_Cap)
             skc.drawLine(x0, y0, x1, y1, p)
 
     def polygon(self, pts, fill=None, outline=None, width=2.0, alpha=1.0,
-                curve=False, jitter=0.0, seed=0):
+                curve=False, jitter=0.0, seed=0, smooth=None):
         """多边形。curve=True 过点样条（圆润轮廓）；jitter>0 手绘抖动（位置颤动 +
-        描边压感，自动先样条再变宽描边，fill/outline 一致）。seed 固定同一形状。"""
+        描边压感）；smooth 缺省跟随 curve or jitter>0，显式 smooth=False 可得
+        "抖而不圆" 的机械手绘边（列车/楼群）。seed 固定同一形状。"""
         if len(pts) < 2:
             return
         pts = self._hand_pts(pts, jitter, seed, True)
         hand = jitter > 0
-        smooth = curve or hand
+        if smooth is None:
+            smooth = curve or hand
         skc = self._sk_ctx()
         if skc is not None:
             if smooth and len(pts) >= 3:
-                pts = self._cr_sample(pts, True)
+                pts = self._dense(pts, True)
             pix = [(self._ix(px), self._iy(py)) for px, py in pts]
             xs, ys = [p[0] for p in pix], [p[1] for p in pix]
             self._sk_touch(min(xs), min(ys), max(xs), max(ys))
@@ -532,7 +547,7 @@ class Canvas(object):
         f = self._fill(fill, alpha)
         spix = pts
         if smooth and len(pts) >= 3:
-            spix = self._cr_sample(pts, True)
+            spix = self._dense(pts, True)
         pix = [(self._ix(px), self._iy(py)) for px, py in spix]
         if f is not None and len(pix) >= 3:
             self._d.polygon(pix, fill=f)
@@ -540,29 +555,32 @@ class Canvas(object):
             if hand:
                 col = self._fill(outline, alpha)
                 k = clamp(jitter / 2.0, 0.3, 1.5)
-                raw = [self._hand_noise(i * 3 + 7, seed) for i in range(len(pix) + 2)]
+                raw = [self._hand_noise(i, seed) for i in range(len(pix) + 4)]
                 for i in range(len(pix)):
                     x0, y0 = pix[i]
                     x1, y1 = pix[(i + 1) % len(pix)]
-                    s = (raw[i] + raw[i + 1] + raw[i + 2]) / 3.0
-                    w = max(1.0, width * (1.0 + 0.5 * k * s))
+                    s = (raw[i] + raw[i + 1] + raw[i + 2] + raw[i + 3]) / 4.0
+                    w = max(1.0, width * (1.0 + 0.3 * k * s))
                     self._d.line([x0, y0, x1, y1], fill=col, width=self._lw(w))
             else:
                 self._d.line(pix + [pix[0]], fill=self._fill(outline, alpha),
                              width=self._lw(width), joint="curve")
 
-    def lines(self, pts, color="fg", width=2.0, alpha=1.0, curve=False, jitter=0.0, seed=0):
-        """折线/曲线。curve=True 过点样条；jitter>0 手绘抖动描边（样条 + 压感）。"""
+    def lines(self, pts, color="fg", width=2.0, alpha=1.0, curve=False, jitter=0.0,
+              seed=0, smooth=None):
+        """折线/曲线。curve=True 过点样条；jitter>0 手绘抖动描边（样条 + 压感）；
+        smooth 缺省跟随 curve or jitter>0。"""
         self._pil_first()
         if len(pts) < 2:
             return
         pts = self._hand_pts(pts, jitter, seed, False)
         hand = jitter > 0
-        smooth = curve or hand
+        if smooth is None:
+            smooth = curve or hand
         pix = [(self._ix(px), self._iy(py)) for px, py in pts]
         skc = self._sk_ctx()
         if skc is not None and smooth and len(pts) > 2:
-            pix = [(self._ix(px), self._iy(py)) for px, py in self._cr_sample(pts, False)]
+            pix = [(self._ix(px), self._iy(py)) for px, py in self._dense(pts, False)]
         if skc is not None:
             xs, ys = [p[0] for p in pix], [p[1] for p in pix]
             self._sk_touch(min(xs), min(ys), max(xs), max(ys))
@@ -577,16 +595,16 @@ class Canvas(object):
             self._d.line(pix, fill=self._fill(color, alpha), width=self._lw(width), joint="curve")
             return
         if smooth and len(pts) > 2:
-            pix = [(self._ix(px), self._iy(py)) for px, py in self._cr_sample(pts, False)]
+            pix = [(self._ix(px), self._iy(py)) for px, py in self._dense(pts, False)]
         if hand:
             col = self._fill(color, alpha)
             k = clamp(jitter / 2.0, 0.3, 1.5)
-            raw = [self._hand_noise(i * 3 + 7, seed) for i in range(len(pix) + 2)]
+            raw = [self._hand_noise(i, seed) for i in range(len(pix) + 4)]
             for i in range(len(pix) - 1):
                 x0, y0 = pix[i]
                 x1, y1 = pix[i + 1]
-                s = (raw[i] + raw[i + 1] + raw[i + 2]) / 3.0
-                w = max(1.0, width * (1.0 + 0.5 * k * s))
+                s = (raw[i] + raw[i + 1] + raw[i + 2] + raw[i + 3]) / 4.0
+                w = max(1.0, width * (1.0 + 0.3 * k * s))
                 self._d.line([x0, y0, x1, y1], fill=col, width=self._lw(w))
             return
         if len(pix) < 2:
