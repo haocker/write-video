@@ -46,6 +46,27 @@ _ENCODERS = (
 )
 
 
+def _apply_quality(enc_args, quality):
+    """把 quality（数值越小质量越高）套到编码器的质量参数上。"""
+    args = []
+    i = 0
+    while i < len(enc_args):
+        a = enc_args[i]
+        if a in ("-crf", "-cq", "-global_quality", "-q") and i + 1 < len(enc_args):
+            args += [a, str(int(quality))]
+            i += 2
+        elif a == "-qp_i" and i + 1 < len(enc_args):
+            args += [a, str(int(quality))]
+            i += 2
+        elif a == "-qp_p" and i + 1 < len(enc_args):
+            args += [a, str(int(quality) + 2)]
+            i += 2
+        else:
+            args.append(a)
+            i += 1
+    return args
+
+
 def pick_encoder(ffmpeg, verbose=False):
     """探测本机可用的 H.264 编码器（结果按 ffmpeg 路径缓存）。"""
     cache_path = os.path.join(tempfile.gettempdir(), "write_video_encoder.json")
@@ -131,6 +152,8 @@ def render_film(film, path=None, draft=False, sheet=True, flicker=True, progress
     ffmpeg = find_ffmpeg()
     t0 = time.time()
     enc_name, enc_args = pick_encoder(ffmpeg, verbose=progress)
+    if quality is not None:
+        enc_args = _apply_quality(enc_args, quality)
     timings["prepare"] = time.time() - t0
     out = path or (film.name + ".mp4")
     if not os.path.isabs(out):
