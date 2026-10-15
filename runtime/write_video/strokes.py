@@ -60,16 +60,21 @@ def boil(c, i, palette, base=None, mix_k=0.3, fps=8.0):
 
 # ---------------- 笔触本体 ----------------
 
-def stroke(c, x, y, ang, ln, wd, col, alpha=1.0):
-    """单笔：以 (x,y) 为中心、ang 方向 ln 长 wd 宽的凸四边形。
+def stroke(c, x, y, ang, ln, wd, col, alpha=1.0, round_cap=True):
+    """单笔：以 (x,y) 为中心、ang 方向 ln 长 wd 宽的圆头笔触。
 
-    点序 [p1+n, p2+n, p2-n, p1-n]（错误点序会画出蝴蝶结）。
+    本体为凸四边形（点序 [p1+n, p2+n, p2-n, p1-n] 防蝴蝶结），
+    round_cap 时两端各补一个半圆（huashu lineCap='round' 的等效），
+    相邻笔自然融接，无砖块感。
     """
     dx, dy = math.cos(ang) * ln * 0.5, math.sin(ang) * ln * 0.5
     nx, ny = -dy / (ln * 0.5) * wd * 0.5, dx / (ln * 0.5) * wd * 0.5
     c.polygon([(x + dx + nx, y + dy + ny), (x - dx + nx, y - dy + ny),
                (x - dx - nx, y - dy - ny), (x + dx - nx, y + dy - ny)],
               fill=col, alpha=alpha)
+    if round_cap and ln > wd:
+        c.circle(x + dx, y + dy, wd * 0.5, fill=col, alpha=alpha)
+        c.circle(x - dx, y - dy, wd * 0.5, fill=col, alpha=alpha)
 
 
 def stroke_path(c, pts, wd, col, alpha=1.0, round_cap=True):
