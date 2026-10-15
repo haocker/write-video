@@ -273,7 +273,7 @@ class Canvas(object):
     """
 
     def __init__(self, img, ss=1.0, width=None, height=None, ctx=None,
-                 box_origin=(0.0, 0.0), ox=0.0, oy=0.0, draw=None):
+                 box_origin=(0.0, 0.0), ox=0.0, oy=0.0, draw=None, aa=None):
         self.img = img
         self.ss = float(ss)
         self.width = float(width) if width is not None else img.width / self.ss
@@ -286,7 +286,7 @@ class Canvas(object):
         self._skc = None
         self._sk_dirty = False
         self._sk_bbox = None
-        self._aa = os.environ.get("WV_AA", "1") != "0"
+        self._aa = (os.environ.get("WV_AA", "1") != "0") if aa is None else bool(aa)
 
     # ---------- 内部 ----------
     def _palette(self):

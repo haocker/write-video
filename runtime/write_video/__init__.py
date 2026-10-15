@@ -17,7 +17,7 @@
 """
 from .film import Film, Scene, Elem
 from .canvas import Canvas, ease, rand, spring, decay, wiggle, lerp, clamp, parse_color
-from . import canvas, fonts, checks, audio, render, voice, write_audio, icons, strokes
+from . import canvas, fonts, checks, audio, render, voice, write_audio, icons, strokes, styles
 
 wa = write_audio
 
