@@ -52,10 +52,12 @@ description: 用代码编排短视频/MP4（code-to-video）的 Skill。策划�
 | 策划：要定的事、分镜写法、镜头菜单、节奏与文案 | `knowledge/planning.md` |
 | 编排：脚本约定、API 速查、检查循环、自绘菜单、常见坑 | `knowledge/compose.md` |
 | 导演纪律：分镜硬规矩、动效分配、色板、版面焦点、节奏配乐、审片 | `knowledge/craft.md` |
+| 配方卡：同类片的可复现配方（定位/分镜骨架/画面动效声音配方/坑/返修） | `recipes/` |
 
 ## 目录
 
 - `knowledge/` — 策划与编排指南（先读这两个）
+- `recipes/` — 视频创作配方卡（每类片一张：踩完坑之后的可复现配方，照卡直出）
 - `runtime/write_video/` — 运行时（纯 Python，可读源码学手艺）
   - `audio.py` — 音效合成 / 配音 / 混音 / 响度 / **配乐渲染**（`render_score`，纯渲染不含模板）
   - `write_audio/` — 配乐渲染模块（乐谱 API：`Song`/`Track`/`theory`）。默认纯合成、零依赖；
