@@ -957,3 +957,189 @@ def leather(c, shape, col, carve=None, edge=6.0, border=(58, 22, 10), bw=2.6,
     mp = A[..., None]
     bg = bg * (1.0 - mp) + bg * rgb * mp
     c.img.paste(Image.fromarray(np.clip(bg * 255.0, 0, 255).astype(np.uint8)), (0, 0))
+
+
+# ---------------- 15. 达利软钟 + 剪切仿射长影 ----------------
+
+
+def softclock(c, cx, cy, r=88.0, sag=0.8, fold=-34.0, flare=-0.12, t=None,
+              hand_speed=5.0, frame_col=(240, 210, 124), face_col=(246, 239, 214),
+              mark_col=(154, 116, 38), alpha=1.0):
+    """软钟（huashu dali《记忆的永恒》）：圆盘局部坐标 (u,v) 沿映射采样到屏幕——
+    v<=fold 躺在台面上（y 压缩 0.30），v>fold 垂下：X 外摊（flare<0 像软布往外摊开，
+    正值收成冰淇淋筒）、中央下垂高斯 + sin 波纹。外框、表盘、刻度、指针、折线高光都走同一个映射。
+
+    cx/cy: 钟挂在边沿的接触点（局部原点）；r: 半径；sag: 下垂程度（1.2s 内 0.1→1.4 才看得出淌）；
+    fold: 折叠位置（负值=大部分垂下）；t: 指针时刻（默认画布时间）；hand_speed: 分针 rad/s。
+    """
+    tt = t if t is not None else getattr(getattr(c, "ctx", None), "time", 0.0) or 0.0
+    k = c.ss
+
+    def mp(u, v):
+        if v <= fold:
+            return (cx + u, cy + v * 0.30)
+        d = v - fold
+        q = min(1.0, d / (2.0 * r))
+        grow = 1.0 - flare * q
+        settle = min(1.0, d / max(1.0, r))
+        x = cx + u * grow
+        y = (cy + fold * 0.30 + d * (0.62 + 0.30 * sag)
+             + r * 0.5 * sag * math.exp(-(u / (r * 0.55)) ** 2) * settle
+             + r * 0.05 * math.sin(u / r * 2.4 + sag * 2.5) * settle)
+        return (x, y)
+
+    ring = [mp(r * math.cos(a2), r * math.sin(a2)) for a2 in
+            [i / 36.0 * 6.2832 for i in range(37)]]
+    face = [mp(r * 0.80 * math.cos(a2), r * 0.80 * math.sin(a2)) for a2 in
+            [i / 28.0 * 6.2832 for i in range(29)]]
+    c.polygon([(x * k, y * k) for x, y in ring], fill=frame_col, alpha=alpha)
+    c.polygon([(x * k, y * k) for x, y in face], fill=face_col, alpha=alpha)
+    for i in range(12):
+        a2 = i / 12.0 * 6.2832
+        p1 = mp(r * 0.58 * math.cos(a2), r * 0.58 * math.sin(a2))
+        p2 = mp(r * 0.72 * math.cos(a2), r * 0.72 * math.sin(a2))
+        c.line(p1[0] * k, p1[1] * k, p2[0] * k, p2[1] * k, color=mark_col,
+               width=max(1.5, r * 0.045 * k), alpha=alpha)
+    for a2, ln in ((tt * hand_speed, 0.52), (tt * hand_speed / 12.0, 0.36)):
+        pts = []
+        for s in range(9):
+            u = math.cos(a2) * r * ln * s / 8.0
+            v = math.sin(a2) * r * ln * s / 8.0
+            px, py = mp(u, v)
+            pts.append((px * k, py * k))
+        c.lines(pts, color=mark_col, width=max(2.0, r * 0.06 * k), alpha=alpha)
+    hl = [mp(-r * 0.62 + r * 1.24 * i / 6.0, fold + r * 0.06) for i in range(7)]
+    c.lines([(x * k, y * k) for x, y in hl], color=(255, 246, 200),
+            width=max(1.5, r * 0.035 * k), alpha=alpha * 0.7)
+
+
+def longshadow(c, sils, yg, kx=0.85, ky=0.55, alpha=0.55, blur=1.5,
+               horizon=None, col=(15, 18, 30)):
+    """剪切仿射长影（huashu dali）：物体剪影投到着地线 yg——
+    x' = x + kx·(yg-y)，y' = yg - ky·(yg-y)（影子往右后方躺，压向地面透视）。
+
+    sils: f(d, k) 或 [f(d, k), ...]，在离屏画白色剪影（同一张离屏，重叠处不加深）；
+    yg: 着地线（设计 px，墙 0.65h、桌 0.84h、人 0.86h 一类）；horizon: 只留 y>horizon 的地面部分；
+    kx: 剪切（0.85+0.6·easeInOut(lt/1.2) 影子在 1.2s 里明显变长）；ky: 纵向压缩（<1）。
+    坑：影子往观众方向投（ky>0 向下拉伸）全被画框底边吃掉——太阳放左前方低空，往右后方躺。
+    """
+    if callable(sils):
+        sils = [sils]
+    W = max(1, int(round(c.width * c.ss)))
+    H = max(1, int(round(c.height * c.ss)))
+    k = c.ss
+    sil = Image.new("L", (W, H), 0)
+    d = ImageDraw.Draw(sil)
+    for fn in sils:
+        fn(d, k)
+    ygp = yg * k
+    a, b = 1.0, kx / ky
+    cc_, dd, e, f = -(kx / ky) * ygp, 0.0, 1.0 / ky, ygp * (1.0 - 1.0 / ky)
+    warped = sil.transform((W, H), Image.AFFINE, (a, b, cc_, dd, e, f), resample=Image.BILINEAR)
+    if blur > 0:
+        warped = warped.filter(ImageFilter.GaussianBlur(blur * k))
+    sh = np.asarray(warped, dtype=np.float32) / 255.0
+    if horizon is not None:
+        hp = max(0, min(H, int(horizon * k)))
+        sh[:hp, :] = 0.0
+    aa = alpha * sh
+    bg = np.asarray(c.img).astype(np.float32) / 255.0
+    colv = np.asarray(col, dtype=np.float32) / 255.0
+    out = bg * (1.0 - aa[..., None]) + colv[None, None, :] * aa[..., None]
+    c.img.paste(Image.fromarray(np.clip(out * 255.0, 0, 255).astype(np.uint8)), (0, 0))
+
+
+# ---------------- 16. 庞贝马赛克（Hausner 简化版） ----------------
+
+
+def roman(c, arr, scale, cell=12.0, grout=(112, 103, 92), edge_thresh=34.0,
+          small=0.5, jitter=0.06, bevel=2.2, seed=0, alpha=1.0, edge_cap=3500):
+    """庞贝马赛克（huashu 04_roman，Hausner 2001 简化版）：灰浆打底 → 半错位网格旋转方块石
+    （四条半边独立 0.94-1.06 抖动 + 旋转 ±0.06rad，缝宽 g..g+0.12s 不规则）→
+    沿轮廓小石行（底稿相邻 RGB 差 > edge_thresh 的边缘上铺 small 倍小石，朝向沿等值线切向）
+    → 斜面明暗（上左亮 +16%/下右暗 -16%，离边 2.2px）。
+
+    底稿要平涂+粗描边；石块颜色取自底稿（±8% 乘性抖动 + 7% 压暗 + 9% 偏暖 + 7% 偏冷 + ±7 加性灰）。
+    坑：马赛克文字/脸=等宽粗笔画（每笔约 2 块石头宽），Cinzel 细横笔在 7px 石块下会断；
+    小于 3 块石头宽的道具在固定布局里读不出来，做成随手移动的嵌片。
+    """
+    rng = random.Random(seed * 977 + 41)
+    W = max(1, int(round(c.width * c.ss)))
+    H = max(1, int(round(c.height * c.ss)))
+    k = c.ss
+    s = cell * k
+    g = min(1.25, max(0.75, 0.1 * cell)) * k
+    lay = Image.new("RGBA", (W, H), tuple(grout) + (int(255 * min(1.0, alpha)),))
+    d = ImageDraw.Draw(lay, "RGBA")
+    grout_n = (rng.randint(-8, 8), rng.randint(-8, 8), rng.randint(-8, 8))
+    gc = tuple(max(0, min(255, grout[i] + grout_n[i])) for i in range(3))
+
+    def stone(cx, cy, half_base, rot, colv):
+        ca, sa = math.cos(rot), math.sin(rot)
+        hs = []
+        pts = []
+        for i2, (ux, uy) in enumerate(((1, -1), (1, 1), (-1, 1), (-1, -1))):
+            h = half_base[i2]
+            lx, ly = ux * h, uy * h
+            pts.append((cx + (lx * ca - ly * sa), cy + (lx * sa + ly * ca)))
+        d.polygon(pts, fill=colv)
+        if bevel > 0 and half_base[0] > 4.0:
+            bw = max(1, int(round(bevel * k)))
+            lit = tuple(min(255, int(v * 1.16)) for v in colv[:3]) + (colv[3],)
+            dkb = tuple(int(v * 0.84) for v in colv[:3]) + (colv[3],)
+            d.line([pts[0], pts[1]], fill=lit, width=bw)
+            d.line([pts[3], pts[0]], fill=lit, width=bw)
+            d.line([pts[1], pts[2]], fill=dkb, width=bw)
+            d.line([pts[2], pts[3]], fill=dkb, width=bw)
+
+    cols = int(math.ceil(W / s)) + 1
+    rows = int(math.ceil(H / s)) + 1
+    for j in range(rows):
+        off = 0.5 * s if j % 2 else 0.0
+        for i in range(cols):
+            cx = (i + 0.5) * s + off + (rng.random() - 0.5) * s * 0.18
+            cy = (j + 0.5) * s + (rng.random() - 0.5) * s * 0.10
+            hb = tuple((0.47 + 0.06 * rng.random()) * s - g * 0.5 for _ in range(4))
+            rot = (rng.random() - 0.5) * jitter * 2.0
+            r0, g0, b0 = sample(arr, scale, cx / k, cy / k)
+            f = 1.0 + (rng.random() - 0.5) * 0.16
+            if rng.random() < 0.07:
+                f *= 0.88
+            dr, dg, db = 0, 0, 0
+            if rng.random() < 0.09:
+                dr, dg, db = 12, 4, -8
+            elif rng.random() < 0.07:
+                dr, dg, db = -6, 0, 9
+            ad = (rng.random() - 0.5) * 14
+            colv = (max(0, min(255, int(r0 * f + dr + ad))),
+                    max(0, min(255, int(g0 * f + dg + ad))),
+                    max(0, min(255, int(b0 * f + db + ad))), 255)
+            stone(cx, cy, hb, rot, colv)
+    # 沿轮廓小石行
+    e = arr.astype(np.int16)
+    dxm = np.abs(e[:, 1:, :] - e[:, :-1, :]).sum(axis=2)
+    dym = np.abs(e[1:, :, :] - e[:-1, :, :]).sum(axis=2)
+    ed = np.zeros(arr.shape[:2], dtype=np.float32)
+    ed[:, 1:] += dxm
+    ed[1:, :] += dym
+    ys, xs = np.where(ed[: ed.shape[0] - 1, : ed.shape[1] - 1] > edge_thresh)
+    if len(ys) > 0:
+        n = min(edge_cap, len(ys))
+        idx = np.random.RandomState(seed + 5).choice(len(ys), size=n, replace=False)
+        s2 = s * small
+        g2 = g * 0.7
+        gys = np.gradient(ed, axis=0)
+        gxs = np.gradient(ed, axis=1)
+        for ii in idx:
+            py, px = float(ys[ii]) / scale, float(xs[ii]) / scale
+            cx, cy = px * k + (rng.random() - 0.5) * s2 * 0.3, py * k + (rng.random() - 0.5) * s2 * 0.3
+            gyv = gys[min(ys[ii], ed.shape[0] - 2), min(xs[ii], ed.shape[1] - 2)]
+            gxv = gxs[min(ys[ii], ed.shape[0] - 2), min(xs[ii], ed.shape[1] - 2)]
+            rot = math.atan2(gyv, gxv) + math.pi * 0.5 + (rng.random() - 0.5) * 0.2
+            hb = tuple((0.47 + 0.06 * rng.random()) * s2 - g2 * 0.5 for _ in range(4))
+            r0, g0, b0 = sample(arr, scale, px, py)
+            f = 1.0 + (rng.random() - 0.5) * 0.10
+            colv = (max(0, min(255, int(r0 * f))), max(0, min(255, int(g0 * f))),
+                    max(0, min(255, int(b0 * f))), 255)
+            stone(cx, cy, hb, rot, colv)
+    c.paste_full(lay)
