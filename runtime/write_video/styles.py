@@ -21,7 +21,7 @@ import random
 import numpy as np
 from PIL import Image, ImageDraw, ImageFilter
 
-from .canvas import Canvas
+from .canvas import Canvas, parse_color
 
 # ---------------- 底稿采样基建 ----------------
 
@@ -329,8 +329,11 @@ def _fbm(h, w, seed, octaves=((3.0, 0.5), (9.0, 0.3), (28.0, 0.2))):
     return acc / wsum
 
 
-def texture(c, kind="paper", strength=0.5, seed=0, boil_fps=0.0, mode="multiply"):
-    """材质纹理 overlay（画到当前画布上）：paper 宣纸/画布纹、rock 岩壁浮雕、crack 龟裂纹。
+def texture(c, kind="paper", strength=0.5, seed=0, boil_fps=0.0, mode="multiply",
+            n=None):
+    """材质纹理 overlay（画到当前画布上）：paper 宣纸/画布纹、rock 岩壁浮雕、
+    crack 龟裂纹、drag 油画竖向拖笔（soft-light，霍珀）、brush 水粉长条刷痕
+    （overlay，马蒂斯，n=笔痕数量，默认约 2600）。
 
     multiply/明暗合成保饱和（lighter/低 alpha 大面积会洗白底色——01_cave 火光踩坑）。
     boil_fps: 纹理按 N fps 沸腾（换种子重生成）；0 = 静态（缓存）。
@@ -338,10 +341,10 @@ def texture(c, kind="paper", strength=0.5, seed=0, boil_fps=0.0, mode="multiply"
     t = getattr(getattr(c, "ctx", None), "t", 0.0) or 0.0
     step = int(t * boil_fps) if boil_fps > 0 else 0
     W2, H2 = c.img.size
-    key = (kind, seed + step, W2, H2)
+    key = (kind, seed + step, W2, H2, n or 0)
     if _TEX_CACHE["key"] != key:
         _TEX_CACHE["key"] = key
-        _TEX_CACHE["tex"] = _make_texture(kind, H2, W2, key[1])
+        _TEX_CACHE["tex"] = _make_texture(kind, H2, W2, key[1], n)
     tex = _TEX_CACHE["tex"]
     a = np.asarray(c.img).astype(np.float32)
     if kind == "rock":
@@ -353,12 +356,29 @@ def texture(c, kind="paper", strength=0.5, seed=0, boil_fps=0.0, mode="multiply"
     elif kind == "crack":
         lines = np.clip(1.0 - np.abs(tex - 0.5) * 40.0, 0.0, 1.0)
         a *= (1.0 - strength * lines)[..., None]
+    elif kind == "drag":
+        top = np.clip(0.5 + (tex - 0.5) * min(1.0, strength * 2.2), 0.0, 1.0)
+        a = _soft_light(a / 255.0, top) * 255.0
+    elif kind == "brush":
+        b = a / 255.0
+        tt = np.clip(0.5 + (tex - 0.5) * min(1.0, strength * 4.0), 0.0, 1.0)[..., None]
+        a = np.where(b < 0.5, 2.0 * b * tt, 1.0 - 2.0 * (1.0 - b) * (1.0 - tt)) * 255.0
     else:
         a *= (1.0 + strength * (tex - 0.5) * 0.6)[..., None]
     c.img.paste(Image.fromarray(np.clip(a, 0, 255).astype(np.uint8)), (0, 0))
 
 
-def _make_texture(kind, h, w, seed):
+def _soft_light(b, top):
+    """soft-light 混合（b/top 均 0..1，top 可为单通道 (h,w)）。霍珀拖笔用：比 multiply 更轻。"""
+    if top.ndim == 2:
+        top = top[..., None]
+    d = np.where(b <= 0.25, ((16.0 * b - 12.0) * b + 4.0) * b, np.sqrt(np.clip(b, 0.0, 1.0)))
+    return np.where(top <= 0.5,
+                    b - (1.0 - 2.0 * top) * b * (1.0 - b),
+                    b + (2.0 * top - 1.0) * (d - b))
+
+
+def _make_texture(kind, h, w, seed, n=None):
     if kind == "rock":
         tex = _fbm(h, w, seed, octaves=((2.0, 0.45), (7.0, 0.3), (22.0, 0.25)))
         return (tex - tex.min()) / max(1e-6, tex.max() - tex.min())
@@ -366,8 +386,36 @@ def _make_texture(kind, h, w, seed):
         tex = _fbm(h, w, seed, octaves=((6.0, 0.6), (18.0, 0.4)))
         tex = (tex - tex.min()) / max(1e-6, tex.max() - tex.min())
         return np.abs(tex - 0.5) * 2.0
-    n = np.random.RandomState(seed).rand(h, w).astype(np.float32)
-    im = Image.fromarray((n * 255).astype(np.uint8))
+    if kind == "drag":
+        # 竖向拉长 fbm（x 高频 y 低频）为主、斜向为辅——霍珀的墙必须平，刷痕只能若有若无
+        rs = np.random.RandomState(seed)
+        nx, ny = max(2, w // 18), max(2, h // 140)
+        n1 = Image.fromarray((rs.rand(ny, nx) * 255).astype(np.uint8)).resize((w, h), Image.BILINEAR)
+        nx2, ny2 = max(2, w // 30), max(2, h // 30)
+        n2 = Image.fromarray((rs.rand(ny2, nx2) * 255).astype(np.uint8)).resize((w, h), Image.BILINEAR)
+        tex = np.asarray(n1, dtype=np.float32) * 0.85 + np.asarray(n2, dtype=np.float32) * 0.15
+        tex = (tex - tex.min()) / max(1e-6, tex.max() - tex.min())
+        return 0.5 + (tex - 0.5) * 0.8
+    if kind == "brush":
+        # 长条水粉刷痕：60-300px 长、6-22 宽、黑白各半、alpha 0.04-0.13、约 -0.25rad（马蒂斯）
+        rng = np.random.RandomState(seed)
+        kk = w / 1920.0
+        cnt = int(n) if n else int(round(w * h / 800.0))
+        im = Image.new("L", (w, h), 128)
+        d = ImageDraw.Draw(im)
+        for _ in range(cnt):
+            ln = rng.uniform(60.0, 300.0) * kk
+            wd = max(1.0, rng.uniform(6.0, 22.0) * kk)
+            x0 = rng.uniform(-120.0 * kk, w + 120.0 * kk)
+            y0 = rng.uniform(-60.0 * kk, h + 60.0 * kk)
+            aa = -0.25 + rng.uniform(-0.35, 0.35)
+            dx, dy = math.cos(aa) * ln * 0.5, math.sin(aa) * ln * 0.5
+            v = 255.0 if rng.rand() < 0.5 else 0.0
+            fill = int(128 + (v - 128.0) * rng.uniform(0.04, 0.13))
+            d.line([x0 - dx, y0 - dy, x0 + dx, y0 + dy], fill=fill, width=int(wd))
+        return np.asarray(im, dtype=np.float32) / 255.0
+    n_ = np.random.RandomState(seed).rand(h, w).astype(np.float32)
+    im = Image.fromarray((n_ * 255).astype(np.uint8))
     sx = im.resize((max(1, w // 6), h), Image.BILINEAR).resize((w, h), Image.BILINEAR)
     sy = im.resize((w, max(1, h // 3)), Image.BILINEAR).resize((w, h), Image.BILINEAR)
     tex = (np.asarray(sx, dtype=np.float32) * 0.6 + np.asarray(sy, dtype=np.float32) * 0.4)
@@ -642,3 +690,270 @@ def post_bloom(img, strength=0.6, threshold=0.75, radius=12.0, second=2.0):
     glow = (b1 * 0.55 + b2 * 0.8) * strength
     out = 1.0 - (1.0 - np.clip(a, 0, 1)) * (1.0 - np.clip(glow, 0, 1))   # screen
     return Image.fromarray((np.clip(out, 0, 1) * 255).astype(np.uint8))
+
+
+# ---------------- 11. flowLines 流场长笔（蒙克/梵高） ----------------
+
+
+def flowlines(c, arr, scale, cell=24.0, steps=26, step=7.0, width=9.0, a=0.78,
+              field=None, classify=None, params=None, outline=0.0,
+              outline_col=(58, 46, 102), mix=0.0, palette=None,
+              seed=0, boil_fps=8.0, alpha=1.0):
+    """流场长笔（huashu munch/postimp）：抖动网格种子沿方向场积分成 200-300px 长笔，
+    越出本区域即停（区域边界干净），8fps 沸腾换种子。
+
+    蒙克=薄涂不描边（outline=0，a 0.5-0.8；底下先铺同色系平涂，笔缝露出来的是同色）；
+    梵高=厚涂描边（outline 0.8-0.9，笔色混 40% 深蓝）。
+    field: f(x, y, t)->弧度（默认 0.55·sin(x·.011+y·.018-2.4t) 水平扭动）；
+    classify: f(x, y)->区域 key 或 None（None 跳过该笔）；
+    params: {key: dict(steps=, step=, width=, a=, field=, palette=)}——墙/地/其余必须分遍参数，
+    全图同参数会糊成地毯（postimp 坑）；palette 可按区域给不同色板（区域色板十几种色相才有梵高味）；
+    小物件拆到道具层单独画，别被大笔打碎。
+    """
+    t = getattr(getattr(c, "ctx", None), "time", 0.0) or 0.0
+    rng = random.Random(bp_seed(seed, boil_fps, c))
+    W = max(1, int(round(c.width * c.ss)))
+    H = max(1, int(round(c.height * c.ss)))
+    im = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    d = ImageDraw.Draw(im, "RGBA")
+    if field is None:
+        field = lambda x, y, tt: 0.55 * math.sin(x * 0.011 + y * 0.018 - 2.4 * tt)
+    cols = int(c.width / cell) + 2
+    rows = int(c.height / cell) + 2
+    k = c.ss
+    pms = params or {}
+    for j in range(rows):
+        for i in range(cols):
+            x = (i + 0.5 + (rng.random() - 0.5) * 0.9) * cell
+            y = (j + 0.5 + (rng.random() - 0.5) * 0.9) * cell
+            if classify is not None:
+                key = classify(x, y)
+                if key is None:
+                    continue
+                p = pms.get(key, {})
+            else:
+                p = {}
+            st = p.get("steps", steps)
+            sp = p.get("step", step)
+            wd = p.get("width", width)
+            av = p.get("a", a)
+            fld = p.get("field", field)
+            pal = p.get("palette", palette)
+            if isinstance(pal, dict):
+                pal = pal.get(key)
+            if pal and isinstance(pal[0], str):
+                pal = [parse_color(v) for v in pal]
+            r, g, b = sample(arr, scale, x, y)
+            if mix > 0 and pal:
+                pr, pg, pb = pal[rng.randrange(len(pal))]
+                mm = min(1.0, mix * (0.7 + 0.6 * rng.random()))
+                r, g, b = int(r + (pr - r) * mm), int(g + (pg - g) * mm), int(b + (pb - b) * mm)
+            pts = [(x, y)]
+            cx, cy = x, y
+            for _ in range(st + rng.randint(0, 8)):
+                av2 = fld(cx, cy, t)
+                cx += math.cos(av2) * sp
+                cy += math.sin(av2) * sp
+                if cx < -cell or cy < -cell or cx > c.width + cell or cy > c.height + cell:
+                    break
+                if classify is not None and classify(cx, cy) != key:
+                    break
+                pts.append((cx, cy))
+            pix = [(px * k, py * k) for px, py in pts]
+            wpx = max(1, int(round(wd * k)))
+            al = int(255 * min(1.0, av) * min(1.0, alpha))
+            if outline > 0:
+                oc = (int(r * (1.0 - outline) + outline_col[0] * outline),
+                      int(g * (1.0 - outline) + outline_col[1] * outline),
+                      int(b * (1.0 - outline) + outline_col[2] * outline))
+                d.line(pix, fill=oc + (al,), width=wpx + max(2, int(2 * k)), joint="curve")
+            d.line(pix, fill=(r, g, b, al), width=wpx, joint="curve")
+    c.paste_full(im)
+
+
+# ---------------- 12. 整幅行列位移（蒙克「整个世界在流动」） ----------------
+
+
+def post_warp(img, t, row_amp=(9.0, 4.0), row_f=(0.012, 0.031), col_amp=6.0,
+              col_f=0.009, speed=1.0):
+    """整幅行列正弦位移（huashu munch）：按行水平位移 + 按列竖直位移，
+    人、猫、桌都会一起晃，比单独画摇摆的线便宜得多。接 film.post。
+
+    行位移基准配方 9·sin(y·.012+4.2t)+4·sin(y·.031-6t)，列位移 6·sin(x·.009-3.6t)；
+    row_amp/row_f/col_amp/col_f 可调；speed: 时间倍率。
+    边缘钳位拉伸（每行多出来的量由边缘像素补），位移后不露黑边。
+    """
+    a = np.asarray(img).astype(np.float32)
+    h, w = a.shape[:2]
+    ys = np.arange(h, dtype=np.float32)
+    xs = np.arange(w, dtype=np.float32)
+    dx = (row_amp[0] * np.sin(ys * row_f[0] + 4.2 * speed * t)
+          + row_amp[1] * np.sin(ys * row_f[1] - 6.0 * speed * t))
+    xi = np.clip(np.round(xs[None, :] + dx[:, None]), 0, w - 1).astype(np.int32)
+    out = a[np.arange(h)[:, None], xi]
+    dy = col_amp * np.sin(xs * col_f - 3.6 * speed * t)
+    yi = np.clip(np.round(ys[:, None] + dy[None, :]), 0, h - 1).astype(np.int32)
+    out = out[yi, np.arange(w)[None, :]]
+    return Image.fromarray(np.clip(out, 0, 255).astype(np.uint8))
+
+
+# ---------------- 13. 金色度遮罩（哥特泥金/克里姆特） ----------------
+
+_GOLD_CACHE = {"key": None, "fbm": None, "pol": None}
+
+
+def post_gold(img, t, recolor=0.0, sweep=0.0, sweep_t0=0.0, sweep_dur=1.15,
+              mask=None, bright=0.0, lo=(156, 106, 26), mid=(217, 166, 58),
+              hi=(248, 222, 134), glint=0, seed=0, ang=0.45, band_w=0.18,
+              band_a=0.62):
+    """金色度遮罩（huashu gothic/klimt）：逐像素识别金色——
+    clamp((r-b-70)/50)·clamp((g-b-30)/40)·clamp((r-140)/40) 连乘当 alpha，
+    羊皮纸 r-b 只有 42 自动排除；凡金色的地方都会自动被高光扫到，不用再画金色形状。接 film.post。
+
+    recolor: 金箔重着色强度（f = 0.42 + fbm·0.5 + 横向打磨纹·0.45，lo/mid/hi 三色插值，
+             打磨纹 y 频率是 x 的 20 倍以上 = 横向金属拉丝）；
+    sweep: 斜向匀速扫光强度（斜率 ang，sweep_t0 起 sweep_dur 秒从左扫到右——
+           inOut 缓动会提前扫出金区，必须匀速）；band_w: 带宽（归一）；band_a: 峰值强度。
+    mask: 显式遮罩 (h,w) 0..1；bright>0 时改用亮度阈值遮罩（亮部当金）。
+    glint: 遮罩内四角星闪烁数量（klimt 金粉；星星半径别超过 s·(0.6+1.1a)，太大会像圣诞装饰）。
+    """
+    a = np.asarray(img).astype(np.float32) / 255.0
+    h, w = a.shape[:2]
+    r8, g8, b8 = a[..., 0], a[..., 1], a[..., 2]
+    if mask is not None:
+        m = np.asarray(mask, dtype=np.float32)
+        if m.shape != (h, w):
+            m = np.asarray(Image.fromarray((np.clip(m, 0, 1) * 255).astype(np.uint8))
+                           .resize((w, h), Image.BILINEAR), dtype=np.float32) / 255.0
+        m = np.clip(m, 0.0, 1.0)
+    elif bright > 0:
+        lum = a @ np.array([0.2126, 0.7152, 0.0722], dtype=np.float32)
+        m = np.clip((lum - bright) / max(0.05, 1.0 - bright), 0.0, 1.0)
+    else:
+        m = (np.clip((r8 - b8) * 255.0 - 70.0, 0.0, 50.0) / 50.0
+             * np.clip((g8 - b8) * 255.0 - 30.0, 0.0, 40.0) / 40.0
+             * np.clip(r8 * 255.0 - 140.0, 0.0, 40.0) / 40.0)
+    if recolor > 0:
+        key = (h, w, seed)
+        if _GOLD_CACHE["key"] != key:
+            _GOLD_CACHE["key"] = key
+            _GOLD_CACHE["fbm"] = _fbm(h, w, seed + 11)
+            rs = np.random.RandomState(seed + 23)
+            pol = Image.fromarray((rs.rand(h, max(2, w // 24)) * 255).astype(np.uint8))
+            _GOLD_CACHE["pol"] = np.asarray(pol.resize((w, h), Image.BILINEAR),
+                                            dtype=np.float32) / 255.0
+        f = np.clip(0.42 + (_GOLD_CACHE["fbm"] - 0.5) * 0.5
+                    + (_GOLD_CACHE["pol"] - 0.5) * 0.45, 0.0, 1.0)
+        loa = np.asarray(lo, dtype=np.float32) / 255.0
+        mia = np.asarray(mid, dtype=np.float32) / 255.0
+        hia = np.asarray(hi, dtype=np.float32) / 255.0
+        c1 = loa[None, None, :] + (mia - loa)[None, None, :] * np.clip(f / 0.5, 0, 1)[..., None]
+        c2 = mia[None, None, :] + (hia - mia)[None, None, :] * np.clip((f - 0.5) / 0.5, 0, 1)[..., None]
+        gold_rgb = np.where((f < 0.5)[..., None], c1, c2)
+        mm = m * recolor
+        a = a * (1.0 - mm)[..., None] + gold_rgb * mm[..., None]
+    if sweep > 0:
+        u = min(1.0, max(0.0, (t - sweep_t0) / max(0.01, sweep_dur)))
+        span = w * ang + h
+        s = (np.arange(w, dtype=np.float32)[None, :] * ang
+             + np.arange(h, dtype=np.float32)[:, None]) / span
+        cpos = -0.15 + u * 1.3
+        g = np.exp(-(((s - cpos) / max(0.02, band_w * 0.5)) ** 2))
+        a = a + (g * m * sweep * band_a)[..., None] * np.array([1.0, 0.93, 0.72], dtype=np.float32)
+    out = Image.fromarray(np.clip(a * 255.0, 0, 255).astype(np.uint8))
+    if glint > 0:
+        rng = np.random.RandomState(seed + 77)
+        pts = []
+        tries = 0
+        while len(pts) < glint and tries < glint * 30:
+            tries += 1
+            x = int(rng.randint(0, w))
+            y = int(rng.randint(0, h))
+            if m[y, x] > 0.3:
+                pts.append((x, y, rng.rand() * 6.283, 7.0 + rng.rand() * 12.0))
+        ov = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+        d = ImageDraw.Draw(ov)
+        for x, y, ph, s_ in pts:
+            pu = max(0.0, math.sin(6.283 * t * 0.85 + ph))
+            al = pu ** 3
+            if al < 0.06:
+                continue
+            col = (255, 244, 200, int(230 * al))
+            d.line([x - s_, y, x + s_, y], fill=col, width=1)
+            d.line([x, y - s_, x, y + s_], fill=col, width=1)
+            d.ellipse([x - 1.5, y - 1.5, x + 1.5, y + 1.5], fill=col)
+        out = Image.alpha_composite(out.convert("RGBA"), ov).convert("RGB")
+    return out
+
+
+# ---------------- 14. 皮影皮件（刻纹 + 印染透光） ----------------
+
+
+def _erode_mask(im, px):
+    px = max(1, int(round(px)))
+    if px >= 12:
+        small = im.resize((max(2, im.width // 4), max(2, im.height // 4)), Image.BILINEAR)
+        small = small.filter(ImageFilter.MinFilter(min(31, max(3, px // 4)) | 1))
+        return small.resize(im.size, Image.BILINEAR)
+    return im.filter(ImageFilter.MinFilter(px | 1))
+
+
+def _dilate_mask(im, px):
+    px = max(1, int(round(px)))
+    if px >= 12:
+        small = im.resize((max(2, im.width // 4), max(2, im.height // 4)), Image.BILINEAR)
+        small = small.filter(ImageFilter.MaxFilter(min(31, max(3, px // 4)) | 1))
+        return small.resize(im.size, Image.BILINEAR)
+    return im.filter(ImageFilter.MaxFilter(px | 1))
+
+
+def leather(c, shape, col, carve=None, edge=6.0, border=(58, 22, 10), bw=2.6,
+            shadow=(0.28, 6.0, (7.0, 5.0))):
+    """皮影皮件（huashu shadowpuppet）：剪影 → 刻纹（离皮边 2×edge 自动护住，刻不穿外轮廓）
+    → 深褐描边 → 偏移软影 + multiply 印染到幕布（透光 = 幕布色 × 皮色，重叠皮件自然变深）。
+
+    shape: f(d, k) 在透明离屏画白色剪影（d=ImageDraw，设计坐标乘 k=c.ss）；
+    carve: f(d, k) 画刻纹（白色=刻掉：鱼子纹 dots/团花 flowers/云纹螺旋/方格 lattice/刻线 lines）；
+    col: 皮色（印染色）；edge: 刻纹离皮边距离（设计 px）；bw: 深褐描边宽；
+    shadow: (强度, 模糊, 偏移) 幕布上的虚影——皮件没完全贴紧幕布。
+    坑：multiply 重叠变深是对的，但别把重叠放在视觉焦点上（桌腿压裙子=黑块）；
+    白色部位（白胸/白爪）= 整块镂空只留皮边，另起一件 carve 全刻。
+    """
+    W = max(1, int(round(c.width * c.ss)))
+    H = max(1, int(round(c.height * c.ss)))
+    k = c.ss
+    sil = Image.new("L", (W, H), 0)
+    shape(ImageDraw.Draw(sil), k)
+    sil = sil.filter(ImageFilter.GaussianBlur(0.6))
+    sil_a = np.asarray(sil, dtype=np.float32) / 255.0
+    if sil_a.max() < 0.01:
+        return
+    sil_im = Image.fromarray((sil_a * 255).astype(np.uint8))
+    dye = np.asarray(col, dtype=np.float32) / 255.0
+    if carve is not None:
+        cav = Image.new("L", (W, H), 0)
+        carve(ImageDraw.Draw(cav), k)
+        cav_a = np.asarray(cav.filter(ImageFilter.GaussianBlur(0.5)), dtype=np.float32) / 255.0
+        keep = np.asarray(_erode_mask(sil_im, 2.0 * edge * k), dtype=np.float32) / 255.0
+        piece_a = np.clip(sil_a * (1.0 - cav_a * keep), 0.0, 1.0)
+    else:
+        piece_a = sil_a
+    bwp = max(1.5, bw * k)
+    outer = np.asarray(_dilate_mask(sil_im, bwp * 0.5), dtype=np.float32) / 255.0
+    inner = np.asarray(_erode_mask(sil_im, bwp * 0.5), dtype=np.float32) / 255.0
+    ring = np.clip(outer - inner, 0.0, 1.0)
+    A = np.maximum(piece_a, ring)
+    bcol = np.asarray(border, dtype=np.float32) / 255.0
+    mixr = np.clip(ring / np.maximum(A, 1e-5), 0.0, 1.0)[..., None]
+    rgb = dye[None, None, :] * (1.0 - mixr) + bcol[None, None, :] * mixr
+    bg = np.asarray(c.img).astype(np.float32) / 255.0
+    if shadow is not None:
+        sk, sblur, (sdx, sdy) = shadow
+        shim = Image.fromarray((np.roll(np.roll(piece_a, int(sdy * k), axis=0),
+                                        int(sdx * k), axis=1) * 255).astype(np.uint8))
+        sh_a = np.asarray(shim.filter(ImageFilter.GaussianBlur(max(0.5, sblur * k))),
+                          dtype=np.float32) / 255.0
+        bg = bg * (1.0 - (sk * sh_a * 0.88)[..., None])
+    mp = A[..., None]
+    bg = bg * (1.0 - mp) + bg * rgb * mp
+    c.img.paste(Image.fromarray(np.clip(bg * 255.0, 0, 255).astype(np.uint8)), (0, 0))
