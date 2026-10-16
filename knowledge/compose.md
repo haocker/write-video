@@ -64,7 +64,7 @@ if __name__ == "__main__":
 | `s.text(文字, at=, style=, enter=, size=, color=, bold=, font=, x=, y=, pos=, split=, stagger=, line_gap=, align=)` | `**强调**` → 强调色；`\n` 分行；`font="mono"` 等宽；超宽自动缩小（记 info）。注意：等宽字体不含中文，代码块中的中文必须用 `font="sans"` 单独显示（见常见坑 #12） |
 | `s.text(…)` 的 `split` 取 `"char"/"word"/"line"`：逐字/逐词/逐行入场（word：拉丁按词、中文按字、标点并入前一词；空格占据节拍） |
 | `s.list(条目数组, at=, icon=, stagger=, size=, gap=)` | 逐条滑入；icon：内置 check / circle-check / star / rocket / arrow / dot / warn / heart / plus / cross / spark，或 `tabler:名字`（Tabler 图标 5070 个，见下） |
-| **笔触图元（strokes）** | huashu 笔触移植：`strokes.stroke(c,x,y,ang,ln,wd,col)` 单笔、`strokes.field(...)` 方向场铺笔（网格+角度函数+沸腾色+遮罩）、`strokes.boil(...)` 8fps 沸腾色、`strokes.stroke_path(...)` 路径笔触、`strokes.steam(...)` 热气、`strokes.mix/hx` 调色。相机变换由调用方处理；点序已内置防蝴蝶结 |
+| **笔触图元（strokes）** | huashu 笔触移植：`strokes.stroke(c,x,y,ang,ln,wd,col)` 单笔、`strokes.field(...)` 方向场铺笔（网格+角度函数+沸腾色+遮罩）、`strokes.boil(...)` 8fps 沸腾色、`strokes.stroke_path(...)` 路径笔触、`strokes.ribbon(c, pts, width_fn, col, taper=(头,尾))` 可变宽度路径（外粗内细/披帛/书法线，法线偏移拼多边形一次填充）、`strokes.brush(c, pts, width=, tone=, dry=, reveal=)` 毛笔笔触（笔压包络+湿笔芯+连续笔毛飞白，tone 五色焦浓重淡清，reveal 段内揭示进度）、`strokes.steam(...)` 热气、`strokes.mix/hx` 调色。相机变换由调用方处理；点序已内置防蝴蝶结 |
 | **风格渲染器（styles 8 种）** | huashu「平涂底稿→取色重画」移植：`arr, sc = styles.base(c, 底稿fn, scale=0.5)` 平涂离屏底稿；然后 `styles.dabs/seurat/mosaic/facets/halftone/pixel8/ink/watercolor(c, arr, sc, **参数)` 整幅重画。例：`dabs(cell=13, boil_fps=6)`（印象派，沸腾换种子）、`ink(cell=9)`（底稿画成明暗素描，>=thresh 留白）、`watercolor(cell=50)`（跨 pass alpha_composite 水彩叠色）、`pixel8(cw=160, dither=0.12, dither_mode="ordered", cycle=2)`（Bayer 有序抖动 + 调色板循环流色）。全部确定性；单帧 45–600ms，画帧预算内。注意 alpha 叠层要用 `Image.alpha_composite`（ImageDraw 对 RGBA 目标是替换不是混合） |
 | **材质纹理 overlay** | `sty.texture(c, kind="paper"/"rock"/"crack", strength=0.5, seed=0, boil_fps=0)`——宣纸/画布纹、岩壁浮雕（噪声法向明暗）、龟裂纹（噪声等值线），multiply 明暗合成保饱和（lighter/低 alpha 洗白底色，01_cave 火光坑）；`boil_fps` 纹理按 N fps 沸腾（换种子），0=静态缓存。渲染器之后调用，叠在整幅上 |
 | **深度模糊 DoF** | `film.post = lambda img, t: sty.post_dof(img, depth, focus=0.3, max_coc=14, bands=6)`——按深度图分层 blur，越离焦越糊（微距景深/3d 感）。`depth` 是 (h,w) 数组（0=焦点处，1=最远）或预设 `"bottom"`（下近上远）/"top"/"center"（中心实四周虚）；自定义深度在 scene_fn 里按物体位置画深度图传进来 |
@@ -476,19 +476,22 @@ def shot(c, t):
 - **子帧运动模糊**：`film.render(path, mb=6)`——每帧渲染 6 个子帧按快门角展开平均（`shutter=0.5` 默认 180° 快门），快速运镜的拖影/跨步进边界的双影都是真实快门行为。代价：渲染时间 ×mb。定格动画配合 frame_key 用 `mb=2, shutter=0`（或不开）。
 - 两者都来自 sy-styles-20 的移植（render.js 的 frameKey 去重 + --mb 子帧叠加）。
 
-## 后处理（film.post：DoF + 电影感 + 纹理）
+## 后处理（film.post：DoF + 电影感 + VHS + bloom + 纹理）
 
 ```python
 film.post = lambda img, t: sty.post_cinema(
-    sty.post_dof(img, "bottom", focus=0.3, max_coc=14), t,
-    vignette=0.35, grain=0.04, ca=0.6, contrast=1.05, sat=1.05)
+    sty.post_vhs(sty.post_bloom(img, strength=0.55, threshold=0.75), t,
+                 shift=2.5, scan=0.18, noise=0.05, chroma=2.5),
+    t, vignette=0.35, grain=0.04, ca=0.6, contrast=1.05, sat=1.05)
 ```
 
-- `sty.post_dof(img, depth, focus=, max_coc=, bands=6)`：按深度图分层 blur，越离焦越糊。链式组合：DoF 先跑，cinema 后跑（颗粒/暗角在最上）。
+- `sty.post_dof(img, depth, focus=, max_coc=, bands=6)`：按深度图分层 blur，越离焦越糊。链式组合：bloom → VHS → cinema（颗粒/暗角在最上）。
+- `sty.post_bloom(img, strength=0.6, threshold=0.75)`：亮部提取 → 两级高斯 → screen 回叠（shinkai/synthwave 的 glow），明暗交界与霓虹出辉光。
+- `sty.post_vhs(img, t, shift=3, scan=0.22, noise=0.07, chroma=3.5)`：VHS 录像带后期（huashu 26 + sy 12 融合）——RGB 通道分离（错位随时间摆动+偶发跳变）、跟踪噪声带下滚撕扯、扫描线、噪点，按帧号种子确定性。
 - `sty.post_cinema(img, t, ...)`：色散（ca，0 关）/曝光（expo）/对比/饱和/lift-gain 调色/暗角（vignette）/确定性颗粒（grain 按帧号种子，同一 t 永远同图）。numpy 实现，约 20ms/帧。
 - 材质纹理用 `sty.texture(c, kind, strength, ...)`（在 scene_fn 里、渲染器之后调用），详见上方速查表。
 - film.post 在**输出分辨率**上跑（render_frame 缩放之后），单帧检查、联系表、闪烁检测看到的都是后处理后的画面（所见即所得）。
-- 写实/3D 感的片子开 vignette+grain+轻 ca+DoF；扁平插画/像素风少开（污染平涂）。
+- **VHS/错位类后期只能打在平滑大色块上**（霓虹/渐变）：高频笔触纹理（dabs cell 小）+ 通道错位=全帧 RGB 碎化， huashu 的 VHS 也只用于平滑霓虹场景。写实时开 vignette+grain+轻 ca+DoF；扁平插画/像素风少开（污染平涂）。
 
 ## 性能（本机参考）
 

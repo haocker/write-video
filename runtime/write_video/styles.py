@@ -309,14 +309,6 @@ def _bayer8():
     return m / 64.0 - 0.5
 
 
-def _bayer8():
-    """8x8 Bayer 阈值阵（递归生成，归一到 [-0.5, 0.5)），有序抖动去色带。"""
-    m = np.array([[0]], dtype=np.float64)
-    while m.shape[0] < 8:
-        m = np.block([[4 * m, 4 * m + 2.0], [4 * m + 3.0, 4 * m + 1.0]])
-    return m / 64.0 - 0.5
-
-
 # ---------------- 材质纹理 overlay ----------------
 
 _TEX_CACHE = {"key": None, "tex": None}
@@ -581,3 +573,72 @@ def watercolor(c, arr, scale, cell=50.0, passes=3, a0=0.36, seed=0, edge=0.10,
                            fill=dk, width=max(1, int(2.2 * c.ss)), joint="curve")
         acc = lay if acc is None else Image.alpha_composite(acc, lay)
     c.paste_full(acc, alpha)
+
+
+# ---------------- 9. VHS 后期（蒸汽波/录像带） ----------------
+
+
+def post_vhs(img, t, fps=30, shift=3.0, shift_wob=1.5, tear=True, scan=0.22,
+             noise=0.07, track_h=70, track_speed=520, chroma=3.5):
+    """VHS 录像带后期（huashu 26_vaporwave / sy 12-synthwave 融合）：RGB 通道分离 +
+    跟踪噪声带 + 扫描线 + 噪点。确定性（按帧号种子）。
+
+    shift: RGB 错位基础量（px）；shift_wob: 正弦摆幅；chroma: 色度溢出通道错位；
+    tear: 跟踪噪声带（下滚撕扯）；scan: 扫描线强度；noise: 噪点强度。
+    """
+    a = np.asarray(img).astype(np.float32)
+    h, w = a.shape[:2]
+    yy, xx = np.mgrid[0:h, 0:w]
+    # RGB 通道分离（错位量随时间摆动 + 偶发跳变）
+    rng = np.random.RandomState(int(t * fps))
+    wob = shift + shift_wob * math.sin(7.0 * t)
+    if rng.rand() < 0.12:
+        wob += 6.0
+    ox = int(round(wob))
+    r = np.roll(a[..., 0], ox, axis=1)
+    b = np.roll(a[..., 2], -ox, axis=1)
+    out = np.stack([r, a[..., 1], b], axis=-1)
+    # 色度溢出：通道再错位 + 水平糊（亮度保持锐利）
+    if chroma > 0:
+        cx = int(round(chroma))
+        cr = np.roll(out[..., 0], cx, axis=1)
+        cb = np.roll(out[..., 2], -cx, axis=1)
+        out = np.stack([cr, out[..., 1], cb], axis=-1)
+        im = Image.fromarray(np.clip(out, 0, 255).astype(np.uint8))
+        im = im.filter(ImageFilter.GaussianBlur(3.0))
+        out = out * 0.65 + np.asarray(im, dtype=np.float32) * 0.35
+    # 跟踪噪声带（下滚撕扯）
+    if tear:
+        band_y = (track_speed * t + 200) % (h + 160) - 80
+        band = np.exp(-(((yy - band_y) / (track_h * 0.5)) ** 2))
+        xs = np.clip(xx - (np.sin(np.pi * (yy - band_y) / track_h) * 30 * band).astype(np.int32),
+                     0, w - 1)
+        out = np.take_along_axis(out, xs[..., None].repeat(3, axis=2), axis=1)
+        out += band[..., None] * (rng.rand(h, w, 1).astype(np.float32) - 0.5) * 90
+    # 扫描线
+    if scan > 0:
+        sl = np.where(yy % 4 == 0, 1.0 - scan, np.where(yy % 4 == 2, 1.0 - scan * 0.45, 1.0))
+        out *= sl[..., None]
+    # 噪点
+    if noise > 0:
+        out += (rng.rand(h, w, 1).astype(np.float32) - 0.5) * 255 * noise
+    return Image.fromarray(np.clip(out, 0, 255).astype(np.uint8))
+
+
+# ---------------- 10. 泛光 bloom ----------------
+
+
+def post_bloom(img, strength=0.6, threshold=0.75, radius=12.0, second=2.0):
+    """泛光（shinkai/synthwave 的 glow）：亮部提取 → 两级高斯 → screen 回叠。
+
+    strength: 辉光强度；threshold: 亮度阈值（0-1）；radius/second: 两级模糊半径。
+    """
+    a = np.asarray(img).astype(np.float32) / 255.0
+    lum = a @ np.array([0.2126, 0.7152, 0.0722], dtype=np.float32)
+    bright = np.clip((lum - threshold) / max(0.05, 1.0 - threshold), 0.0, 1.0)
+    src = Image.fromarray((np.clip(a * bright[..., None], 0, 1) * 255).astype(np.uint8))
+    b1 = np.asarray(src.filter(ImageFilter.GaussianBlur(radius)), dtype=np.float32) / 255.0
+    b2 = np.asarray(src.filter(ImageFilter.GaussianBlur(radius * second)), dtype=np.float32) / 255.0
+    glow = (b1 * 0.55 + b2 * 0.8) * strength
+    out = 1.0 - (1.0 - np.clip(a, 0, 1)) * (1.0 - np.clip(glow, 0, 1))   # screen
+    return Image.fromarray((np.clip(out, 0, 1) * 255).astype(np.uint8))

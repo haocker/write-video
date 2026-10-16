@@ -2,7 +2,7 @@
 
 > **先读这一句**：huashu 的 35 张样片是同一个构图（风格在变、场景不变），做新题材要为题材重新构图——卡里的渲染器、笔法、色彩逻辑、母题动法可以拿走，坐标、角色、家具不要搬过去。sy-styles-20 的卡同理：手法与编排可拿走，3D 依赖的部分标注了可移植性。
 
-**已移植到 wv runtime 的渲染器**：dabs（印象派/色点）/ seurat（点彩）/ mosaic（镶嵌）/ facets（立体主义切面）/ halftone（波普网点）/ pixel8（像素，含 dither_mode="ordered" Bayer、cycle 调色板循环）/ ink（水墨）/ watercolor（水彩）/ texture（材质纹理 paper/rock/crack）/ post_dof（深度模糊）/ post_cinema（电影感后期）/ 手绘管线 strokes（curve/jitter/smooth）/ pixel_text（5x7 点阵字）。
+**已移植到 wv runtime 的渲染器**：dabs（印象派/色点）/ seurat（点彩）/ mosaic（镶嵌）/ facets（立体主义切面）/ halftone（波普网点）/ pixel8（像素，含 dither_mode="ordered" Bayer、cycle 调色板循环）/ ink（水墨）/ watercolor（水彩）/ texture（材质纹理 paper/rock/crack）/ post_dof（深度模糊）/ post_cinema（电影感后期）/ post_vhs（VHS 录像带后期：RGB 分离+跟踪带+扫描线）/ post_bloom（泛光）/ strokes.ribbon（可变宽度路径）/ strokes.brush（毛笔笔压飞白）/ 手绘管线 strokes（curve/jitter/smooth）/ pixel_text（5x7 点阵字）。
 
 ## 材料层（可盖任何题材）
 
@@ -78,4 +78,4 @@
 
 - ★★★ 20 种、★★ 14 种、★ 1 种（huashu 侧）。
 - **最普遍的短板是角色**：背景过了风格渲染器就像那个风格，角色只用矢量骨架平涂就像贴上去的。下一轮提质先从「角色也过同一个渲染器／按该风格重塑造型」做起。
-- wv 侧需要新渲染器的汇总：VHS 后期（RGB 分离+跟踪带+扫描线）、泛光 bloom、可变宽度 ribbon、毛笔 brush 笔压包络、flowLines 流场积分+行列 warp、softMap/剪切仿射、皮件刻纹印染、距离场排石 Voronoi、逐像素金色度遮罩、G-buffer 风格化 pass、2D SDF 折射。
+- wv 侧需要新渲染器的汇总（已完成：texture、post_dof、post_cinema、post_vhs、post_bloom、ribbon、brush、Bayer 抖动、cycle）：flowLines 流场积分+整幅行列 warp（munch/postimp 漩涡）、softMap 软钟+剪切仿射长影（dali）、皮件刻纹+印染透光（shadowpuppet）、距离场排石+Voronoi 灰浆（roman andamento）、逐像素金色度遮罩（gothic/klimt 扫光）、G-buffer→水彩/排线风格化 pass（handdrawn）、2D SDF 折射（glass）、立体主义 clip evenodd 羽化排线（kirby）、披帛 ribbon 已完成、竖向 fbm 拖笔（hopper）、长条笔痕 overlay（matisse 水粉刷痕）。

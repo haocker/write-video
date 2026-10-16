@@ -17,6 +17,7 @@
 huashu U.steam 移植，逐段 alpha 顶淡出）。相机变换由调用方处理。
 """
 import math
+import random
 
 # ---------------- 色彩工具 ----------------
 
@@ -93,6 +94,147 @@ def ell(c, cx, cy, rx, ry, rot, col, alpha=1.0):
     pts = [(cx + math.cos(rot + math.pi * 2 * i / 10) * rx,
             cy + math.sin(rot + math.pi * 2 * i / 10) * ry) for i in range(10)]
     c.polygon(pts, fill=col, alpha=alpha)
+
+
+def ribbon(c, pts, width_fn, col, alpha=1.0, taper=(0.0, 0.0)):
+    """可变宽度路径（10_nouveau 外粗内细 / 敦煌披帛 / 书法线）：
+    沿点列两侧按 width_fn(q) 法线偏移拼多边形，一次填充。
+
+    pts: [(x,y),...]；width_fn(q) -> 宽度，q 为弧长参数 0..1；
+    taper: (头,尾) 收尖比例——头尾各占这段弧长比例内宽度乘 (q/头)^0.7 之类的收尖。
+    """
+    if len(pts) < 2:
+        return
+    # 弧长参数化
+    seg = [math.hypot(b[0] - a[0], b[1] - a[1]) for a, b in zip(pts, pts[1:])]
+    total = sum(seg) or 1.0
+    qs = [0.0]
+    for ln in seg:
+        qs.append(qs[-1] + ln / total)
+    left, right = [], []
+    for i, (x, y) in enumerate(pts):
+        q = qs[i]
+        # 法线（用相邻点方向）
+        if i == 0:
+            dx, dy = pts[1][0] - x, pts[1][1] - y
+        elif i == len(pts) - 1:
+            dx, dy = x - pts[i - 1][0], y - pts[i - 1][1]
+        else:
+            dx, dy = pts[i + 1][0] - pts[i - 1][0], pts[i + 1][1] - pts[i - 1][1]
+        ln = math.hypot(dx, dy) or 1.0
+        nx, ny = -dy / ln, dx / ln
+        wdt = width_fn(q) * 0.5
+        h0, t0 = taper
+        if h0 > 0 and q < h0:
+            wdt *= (q / h0) ** 0.7
+        if t0 > 0 and q > 1.0 - t0:
+            wdt *= ((1.0 - q) / t0) ** 0.7
+        left.append((x + nx * wdt, y + ny * wdt))
+        right.append((x - nx * wdt, y - ny * wdt))
+    c.polygon(left + right[::-1], fill=col, alpha=alpha)
+
+
+def brush(c, pts, width=6.0, tone=0.8, dry=0.4, head=0.08, tail=0.18, col=(16, 14, 12),
+          alpha=1.0, seed=0, reveal=None):
+    """毛笔笔触（17_ink 水墨）：笔压包络 + 湿笔芯 + 连续笔毛飞白。
+
+    pts: [(x,y),...]；tone: 墨色浓度 0..1（焦 .9/浓 .8/重 .6/淡 .35/清 .15）；
+    dry: 飞白程度 0..1；head/tail: 起收笔的笔压渐变段（弧长比例）；
+    reveal: (d, l, p) 段内揭示进度 0..1（开场逐笔写出用），None=整笔全画。
+    飞白实现：笔毛是每根一条连续折线（butt cap 拼接），噪声低于阈值断开露纸。
+    """
+    if len(pts) < 2:
+        return
+    # Catmull-Rom 加密 + 等弧长重采样（不重采样飞白噪声频率会随笔画长短变化）
+    dense = []
+    n = len(pts)
+    for i in range(n - 1):
+        p0 = pts[max(0, i - 1)]
+        p1, p2 = pts[i], pts[i + 1]
+        p3 = pts[min(n - 1, i + 2)]
+        for k in range(4):
+            u = k / 4.0
+            u2, u3 = u * u, u * u * u
+            x = 0.5 * ((2 * p1[0]) + (-p0[0] + p2[0]) * u +
+                       (2 * p0[0] - 5 * p1[0] + 4 * p2[0] - p3[0]) * u2 +
+                       (-p0[0] + 3 * p1[0] - 3 * p2[0] + p3[0]) * u3)
+            y = 0.5 * ((2 * p1[1]) + (-p0[1] + p2[1]) * u +
+                       (2 * p0[1] - 5 * p1[1] + 4 * p2[1] - p3[1]) * u2 +
+                       (-p0[1] + 3 * p1[1] - 3 * p2[1] + p3[1]) * u3)
+            dense.append((x, y))
+    dense.append(pts[-1])
+    res = [dense[0]]
+    target = 4.0
+    acc = 0.0
+    for a, b in zip(dense, dense[1:]):
+        ln = math.hypot(b[0] - a[0], b[1] - a[1])
+        acc += ln
+        while acc >= target:
+            k = 1.0 - (acc - target) / max(1e-6, ln)
+            res.append((a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k))
+            acc -= target
+    seg = [math.hypot(b[0] - a[0], b[1] - a[1]) for a, b in zip(res, res[1:])]
+    total = sum(seg) or 1.0
+    qs = [0.0]
+    for ln in seg:
+        qs.append(qs[-1] + ln / total)
+    # 揭示进度裁剪
+    q_end = 1.0
+    if reveal is not None:
+        d, l, p = reveal
+        q_end = min(1.0, max(0.0, (p * (d + l) - d) / max(1e-6, l))) if l > 0 else 1.0
+    rng = random.Random(seed * 977 + int(qs[-1] * 1000))
+    # 笔压包络
+    def prof(q):
+        e_head = _smoothstep(0.0, head, q) if head > 0 else 1.0
+        e_tail = 1.0 - 0.7 * _smoothstep(1.0 - tail, 1.0, q) if tail > 0 else 1.0
+        return e_head * e_tail * (0.85 + 0.15 * (math.sin(q * 23.7 + seed) * 0.5 + 0.5))
+    # 湿笔芯（ribbon 填充）
+    def core_w(q):
+        return width * prof(q) * (1.0 - 0.85 * dry * (q ** 0.8))
+    core = [(x, y) for i, (x, y) in enumerate(res) if qs[i] <= q_end]
+    if len(core) >= 2:
+        ribbon(c, core, core_w, _ink_col(col, tone * 0.72 * alpha), alpha=1.0)
+    # 笔毛（连续折线，断开处露纸 = 飞白）
+    nb = max(3, int(width / 2.2))
+    for bi in range(nb):
+        fr = (bi + 0.5) / nb - 0.5
+        run = []
+        for i, (x, y) in enumerate(res):
+            q = qs[i]
+            if q > q_end:
+                break
+            if i == 0:
+                dx, dy = res[1][0] - x, res[1][1] - y
+            elif i == len(res) - 1:
+                dx, dy = x - res[i - 1][0], y - res[i - 1][1]
+            else:
+                dx, dy = res[i + 1][0] - res[i - 1][0], res[i + 1][1] - res[i - 1][1]
+            ln = math.hypot(dx, dy) or 1.0
+            nx, ny = -dy / ln, dx / ln
+            wdt = width * prof(q) * (0.475 + fr * 0.94)
+            n = math.sin(q * 41.3 + bi * 1.9 + seed * 3.1) * 0.5 + 0.5
+            if n < dry * (q ** 1.2) * 0.95 + 0.05:
+                if len(run) >= 2:
+                    c.lines(run, _ink_col(col, tone * 0.55 * alpha), max(1.0, width * 0.09),
+                            alpha=alpha)
+                run = []
+                continue
+            run.append((x + nx * wdt, y + ny * wdt))
+        if len(run) >= 2:
+            c.lines(run, _ink_col(col, tone * 0.55 * alpha), max(1.0, width * 0.09),
+                    alpha=alpha)
+
+
+def _smoothstep(a, b, x):
+    k = min(1.0, max(0.0, (x - a) / max(1e-9, b - a)))
+    return k * k * (3.0 - 2.0 * k)
+
+
+def _ink_col(col, a_factor):
+    if isinstance(col, (tuple, list)) and len(col) == 3:
+        return (int(col[0]), int(col[1]), int(col[2]), int(255 * min(1.0, a_factor)))
+    return col
 
 
 # ---------------- 方向场铺笔 ----------------
