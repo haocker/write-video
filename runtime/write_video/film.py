@@ -1252,7 +1252,8 @@ class Scene(object):
 
 class Film(object):
     def __init__(self, width=1920, height=1080, duration=None, fps=30, ss=2,
-                 theme="midnight", bpm=120, music=None, seed=1, grain=True, name="film"):
+                 theme="midnight", bpm=120, music=None, seed=1, grain=True, name="film",
+                 frame_key=None, post=None):
         """music 配乐来源，二选一：
              * 乐谱 Song 对象（`wv.wa.Song(...)`，乐谱自己写）；
              * 现成音频文件路径（循环铺满全片）；
@@ -1266,6 +1267,8 @@ class Film(object):
         self.grain = bool(grain)
         self.name = name
         self.bpm = bpm
+        self.frame_key = frame_key   # 定格动画帧去重：fn(t) → 可哈希 key，key 相同的帧只渲染一次
+        self.post = post             # 成片后处理钩子：fn(img, t) → img（暗角/颗粒/调色/色散）
         self._duration = float(duration) if duration is not None else None
         self.theme = make_theme(theme)
         self.palette = self.theme["colors"]
@@ -1838,10 +1841,15 @@ class Film(object):
             el.draw(img, t, ss, pal, extra_dy=dy)
         k = ss / float(out_scale)
         if abs(k - 2.0) < 1e-6:
-            return img.reduce(2)
-        if abs(k - 1.0) < 1e-6:
-            return img
-        return img.resize((max(1, int(round(self.width * out_scale))), max(1, int(round(self.height * out_scale)))), Image.BILINEAR)
+            out = img.reduce(2)
+        elif abs(k - 1.0) < 1e-6:
+            out = img
+        else:
+            out = img.resize((max(1, int(round(self.width * out_scale))),
+                              max(1, int(round(self.height * out_scale)))), Image.BILINEAR)
+        if self.post is not None:
+            out = self.post(out, t)
+        return out
 
     def frame(self, t, path=None):
         im = self.render_frame(t, ss=self.ss, out_scale=1.0)

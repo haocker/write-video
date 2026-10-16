@@ -301,10 +301,52 @@ PIXEL_PAL = ((28, 26, 40), (56, 48, 88), (96, 78, 140), (64, 120, 160), (88, 176
              (160, 52, 72), (240, 232, 214), (120, 108, 100), (200, 120, 150), (40, 90, 70))
 
 
-def pixel8(c, arr, scale, cw=200, palette=None, alpha=1.0, dither=0.0):
+def _bayer8():
+    """8x8 Bayer 阈值阵（递归生成，归一到 [-0.5, 0.5)），有序抖动去色带。"""
+    m = np.array([[0]], dtype=np.float64)
+    while m.shape[0] < 8:
+        m = np.block([[4 * m, 4 * m + 2.0], [4 * m + 3.0, 4 * m + 1.0]])
+    return m / 64.0 - 0.5
+
+
+def post_cinema(img, t, vignette=0.35, grain=0.035, ca=0.0, expo=1.0,
+                contrast=1.0, sat=1.0, lift=(0.0, 0.0, 0.0), gain=(1.0, 1.0, 1.0),
+                fps=30):
+    """电影感后处理（接 film.post）：色散/曝光/对比/饱和/lift-gain 调色/暗角/确定性颗粒。
+
+    grain 按帧号做种子（同一 t 永远同图）；ca 为色散强度（0 关，0.6 轻微）。
+    """
+    a = np.asarray(img).astype(np.float32) / 255.0
+    h, w = a.shape[:2]
+    if ca > 0:
+        yy, xx = np.mgrid[0:h, 0:w]
+        offx = np.round((xx - w * 0.5) / w * ca * 6.0).astype(np.int32)
+        offy = np.round((yy - h * 0.5) / h * ca * 6.0).astype(np.int32)
+        r = a[..., 0][np.clip(yy + offy, 0, h - 1), np.clip(xx - offx, 0, w - 1)]
+        b = a[..., 2][np.clip(yy - offy, 0, h - 1), np.clip(xx + offx, 0, w - 1)]
+        a = np.stack([r, a[..., 1], b], axis=-1)
+    a = a * expo
+    a = (a - 0.5) * contrast + 0.5
+    if sat != 1.0:
+        g = a @ np.array([0.2126, 0.7152, 0.0722], dtype=np.float32)
+        a = g[..., None] + (a - g[..., None]) * sat
+    a = a * np.asarray(gain, dtype=np.float32) + np.asarray(lift, dtype=np.float32) * (1.0 - a)
+    if vignette > 0:
+        yy, xx = np.mgrid[0:h, 0:w]
+        d = np.sqrt(((xx - w * 0.5) / w * 2.6) ** 2 + ((yy - h * 0.5) / h * 2.0) ** 2)
+        a *= (1.0 - vignette * np.clip((d - 0.6) / 0.75, 0.0, 1.0))[..., None]
+    if grain > 0:
+        rng = np.random.RandomState(int(t * fps))
+        a += (rng.rand(h, w, 1).astype(np.float32) - 0.5) * grain
+    a += (np.random.RandomState(7).rand(h, w, 1).astype(np.float32) - 0.5) / 255.0
+    return Image.fromarray((np.clip(a, 0.0, 1.0) * 255).astype(np.uint8))
+
+
+def pixel8(c, arr, scale, cw=200, palette=None, alpha=1.0, dither=0.0, dither_mode="random"):
     """8-bit：底稿降采样 + 最近色板量化 + 最近邻放大（240×135 情怀）。
 
     距离在 int32 里算：int16 平方会溢出回绕成负数，argmin 选中垃圾颜色。
+    dither: 抖动强度（0-1）；dither_mode: "random"（随机去色带）/"ordered"（Bayer 有序，像素风渐变）。
     """
     pal = np.array(palette or PIXEL_PAL, dtype=np.int32)
     cw = int(cw)
@@ -312,8 +354,12 @@ def pixel8(c, arr, scale, cw=200, palette=None, alpha=1.0, dither=0.0):
     small = Image.fromarray(arr.astype(np.uint8)).resize((cw, ch), Image.BOX)
     sa = np.asarray(small).astype(np.int32).reshape(-1, 3)
     if dither > 0:
-        noise = (np.random.RandomState(7).rand(sa.shape[0], 1) - 0.5) * 255 * dither
-        sa = sa + noise.astype(np.int32)
+        if dither_mode == "ordered":
+            B = _bayer8()[np.arange(ch)[:, None] % 8, np.arange(cw)[None, :] % 8]
+            sa = sa + (B * 255 * dither).reshape(-1, 1).astype(np.int32)
+        else:
+            noise = (np.random.RandomState(7).rand(sa.shape[0], 1) - 0.5) * 255 * dither
+            sa = sa + noise.astype(np.int32)
     dist = ((sa[:, None, :] - pal[None, :, :]) ** 2).sum(axis=2)
     idx = dist.argmin(axis=1)
     quant = pal[idx].reshape(ch, cw, 3).astype(np.uint8)

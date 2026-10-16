@@ -139,7 +139,12 @@ def film_exclusions(film):
     return ex
 
 
-def render_film(film, path=None, draft=False, sheet=True, flicker=True, progress=True, quality=None):
+def _cached_frame(b, w, h):
+    return Image.frombytes("RGB", (w, h), b)
+
+
+def render_film(film, path=None, draft=False, sheet=True, flicker=True, progress=True, quality=None,
+                mb=1, shutter=0.5):
     t_start = time.time()
     timings = {}
     film._prepare()
@@ -181,11 +186,34 @@ def render_film(film, path=None, draft=False, sheet=True, flicker=True, progress
         sys.stdout.flush()
     proc = subprocess.Popen(cmd, stdin=subprocess.PIPE)
     t_frames0 = time.time()
+    mb = max(1, int(mb))
+    last_key = None
+    last_bytes = None
     try:
         for i in range(total):
             t = i / float(fps)
-            frame = film.render_frame(t, ss=ss, out_scale=out_scale)
-            proc.stdin.write(frame.tobytes())
+            # 定格动画帧去重（frameKey）：key 相同直接复用上一帧字节，不重画
+            fk = film.frame_key(t) if film.frame_key is not None else None
+            if fk is not None and fk == last_key and last_bytes is not None:
+                proc.stdin.write(last_bytes)
+                if an is not None:
+                    an.push(_cached_frame(last_bytes, Wout, Hout))
+                continue
+            if mb > 1:
+                # 子帧运动模糊：mb 个子帧按快门角展开（含半帧偏移），平均成一帧
+                acc = None
+                for k in range(mb):
+                    tt = t + shutter * ((k + 0.5) / mb - 0.5) / fps
+                    sub = np.asarray(film.render_frame(tt, ss=ss, out_scale=out_scale),
+                                     dtype=np.float32)
+                    acc = sub if acc is None else acc + sub
+                frame = Image.fromarray(
+                    np.clip(acc / mb + 0.5, 0, 255).astype(np.uint8))
+            else:
+                frame = film.render_frame(t, ss=ss, out_scale=out_scale)
+            last_key = fk
+            last_bytes = frame.tobytes()
+            proc.stdin.write(last_bytes)
             if an is not None:
                 an.push(frame)
             if progress and i % 60 == 0 and i > 0:
