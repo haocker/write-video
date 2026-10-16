@@ -302,15 +302,18 @@ PIXEL_PAL = ((28, 26, 40), (56, 48, 88), (96, 78, 140), (64, 120, 160), (88, 176
 
 
 def pixel8(c, arr, scale, cw=200, palette=None, alpha=1.0, dither=0.0):
-    """8-bit：底稿降采样 + 最近色板量化 + 最近邻放大（240×135 情怀）。"""
-    pal = np.array(palette or PIXEL_PAL, dtype=np.int16)
+    """8-bit：底稿降采样 + 最近色板量化 + 最近邻放大（240×135 情怀）。
+
+    距离在 int32 里算：int16 平方会溢出回绕成负数，argmin 选中垃圾颜色。
+    """
+    pal = np.array(palette or PIXEL_PAL, dtype=np.int32)
     cw = int(cw)
     ch = max(1, int(round(cw * c.height / c.width)))
-    small = Image.fromarray(arr.astype(np.uint8)).resize((cw, ch), Image.BILINEAR)
-    sa = np.asarray(small).astype(np.int16).reshape(-1, 3)
+    small = Image.fromarray(arr.astype(np.uint8)).resize((cw, ch), Image.BOX)
+    sa = np.asarray(small).astype(np.int32).reshape(-1, 3)
     if dither > 0:
         noise = (np.random.RandomState(7).rand(sa.shape[0], 1) - 0.5) * 255 * dither
-        sa = sa + noise.astype(np.int16)
+        sa = sa + noise.astype(np.int32)
     dist = ((sa[:, None, :] - pal[None, :, :]) ** 2).sum(axis=2)
     idx = dist.argmin(axis=1)
     quant = pal[idx].reshape(ch, cw, 3).astype(np.uint8)
