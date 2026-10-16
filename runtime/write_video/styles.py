@@ -973,7 +973,6 @@ def softclock(c, cx, cy, r=88.0, sag=0.8, fold=-34.0, flare=-0.12, t=None,
     fold: 折叠位置（负值=大部分垂下）；t: 指针时刻（默认画布时间）；hand_speed: 分针 rad/s。
     """
     tt = t if t is not None else getattr(getattr(c, "ctx", None), "time", 0.0) or 0.0
-    k = c.ss
 
     def mp(u, v):
         if v <= fold:
@@ -992,25 +991,23 @@ def softclock(c, cx, cy, r=88.0, sag=0.8, fold=-34.0, flare=-0.12, t=None,
             [i / 36.0 * 6.2832 for i in range(37)]]
     face = [mp(r * 0.80 * math.cos(a2), r * 0.80 * math.sin(a2)) for a2 in
             [i / 28.0 * 6.2832 for i in range(29)]]
-    c.polygon([(x * k, y * k) for x, y in ring], fill=frame_col, alpha=alpha)
-    c.polygon([(x * k, y * k) for x, y in face], fill=face_col, alpha=alpha)
+    c.polygon(ring, fill=frame_col, alpha=alpha)
+    c.polygon(face, fill=face_col, alpha=alpha)
     for i in range(12):
         a2 = i / 12.0 * 6.2832
         p1 = mp(r * 0.58 * math.cos(a2), r * 0.58 * math.sin(a2))
         p2 = mp(r * 0.72 * math.cos(a2), r * 0.72 * math.sin(a2))
-        c.line(p1[0] * k, p1[1] * k, p2[0] * k, p2[1] * k, color=mark_col,
-               width=max(1.5, r * 0.045 * k), alpha=alpha)
+        c.line(p1[0], p1[1], p2[0], p2[1], color=mark_col,
+               width=max(1.5, r * 0.045), alpha=alpha)
     for a2, ln in ((tt * hand_speed, 0.52), (tt * hand_speed / 12.0, 0.36)):
         pts = []
         for s in range(9):
             u = math.cos(a2) * r * ln * s / 8.0
             v = math.sin(a2) * r * ln * s / 8.0
-            px, py = mp(u, v)
-            pts.append((px * k, py * k))
-        c.lines(pts, color=mark_col, width=max(2.0, r * 0.06 * k), alpha=alpha)
+            pts.append(mp(u, v))
+        c.lines(pts, color=mark_col, width=max(2.0, r * 0.06), alpha=alpha)
     hl = [mp(-r * 0.62 + r * 1.24 * i / 6.0, fold + r * 0.06) for i in range(7)]
-    c.lines([(x * k, y * k) for x, y in hl], color=(255, 246, 200),
-            width=max(1.5, r * 0.035 * k), alpha=alpha * 0.7)
+    c.lines(hl, color=(255, 246, 200), width=max(1.5, r * 0.035), alpha=alpha * 0.7)
 
 
 def longshadow(c, sils, yg, kx=0.85, ky=0.55, alpha=0.55, blur=1.5,
