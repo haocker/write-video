@@ -309,6 +309,119 @@ def _bayer8():
     return m / 64.0 - 0.5
 
 
+def _bayer8():
+    """8x8 Bayer 阈值阵（递归生成，归一到 [-0.5, 0.5)），有序抖动去色带。"""
+    m = np.array([[0]], dtype=np.float64)
+    while m.shape[0] < 8:
+        m = np.block([[4 * m, 4 * m + 2.0], [4 * m + 3.0, 4 * m + 1.0]])
+    return m / 64.0 - 0.5
+
+
+# ---------------- 材质纹理 overlay ----------------
+
+_TEX_CACHE = {"key": None, "tex": None}
+
+
+def _fbm(h, w, seed, octaves=((3.0, 0.5), (9.0, 0.3), (28.0, 0.2))):
+    """分形值噪声（白噪声 + 多尺度高斯模糊加权，确定性）。返回 (h, w) float32 0..1。"""
+    rng = np.random.RandomState(seed)
+    acc = np.zeros((h, w), dtype=np.float32)
+    wsum = 0.0
+    for radius, wt in octaves:
+        n = rng.rand(h // 4 + 4, w // 4 + 4).astype(np.float32)
+        im = Image.fromarray((n * 255).astype(np.uint8)).resize(
+            (max(1, int(w * radius / 12)) or 1, max(1, int(h * radius / 12)) or 1),
+            Image.BILINEAR).resize((w, h), Image.BILINEAR)
+        acc += (np.asarray(im, dtype=np.float32) / 255.0) * wt
+        wsum += wt
+    return acc / wsum
+
+
+def texture(c, kind="paper", strength=0.5, seed=0, boil_fps=0.0, mode="multiply"):
+    """材质纹理 overlay（画到当前画布上）：paper 宣纸/画布纹、rock 岩壁浮雕、crack 龟裂纹。
+
+    multiply/明暗合成保饱和（lighter/低 alpha 大面积会洗白底色——01_cave 火光踩坑）。
+    boil_fps: 纹理按 N fps 沸腾（换种子重生成）；0 = 静态（缓存）。
+    """
+    t = getattr(getattr(c, "ctx", None), "t", 0.0) or 0.0
+    step = int(t * boil_fps) if boil_fps > 0 else 0
+    W2, H2 = c.img.size
+    key = (kind, seed + step, W2, H2)
+    if _TEX_CACHE["key"] != key:
+        _TEX_CACHE["key"] = key
+        _TEX_CACHE["tex"] = _make_texture(kind, H2, W2, key[1])
+    tex = _TEX_CACHE["tex"]
+    a = np.asarray(c.img).astype(np.float32)
+    if kind == "rock":
+        gx = np.gradient(tex.astype(np.float32), axis=1)[0]
+        gy = np.gradient(tex.astype(np.float32), axis=0)[0]
+        shade = -(gx * 0.7 + gy * 0.7)
+        shade = np.clip(shade * 3.0, -1.0, 1.0)
+        a *= (1.0 + strength * shade)[..., None]
+    elif kind == "crack":
+        lines = np.clip(1.0 - np.abs(tex - 0.5) * 40.0, 0.0, 1.0)
+        a *= (1.0 - strength * lines)[..., None]
+    else:
+        a *= (1.0 + strength * (tex - 0.5) * 0.6)[..., None]
+    c.img.paste(Image.fromarray(np.clip(a, 0, 255).astype(np.uint8)), (0, 0))
+
+
+def _make_texture(kind, h, w, seed):
+    if kind == "rock":
+        tex = _fbm(h, w, seed, octaves=((2.0, 0.45), (7.0, 0.3), (22.0, 0.25)))
+        return (tex - tex.min()) / max(1e-6, tex.max() - tex.min())
+    if kind == "crack":
+        tex = _fbm(h, w, seed, octaves=((6.0, 0.6), (18.0, 0.4)))
+        tex = (tex - tex.min()) / max(1e-6, tex.max() - tex.min())
+        return np.abs(tex - 0.5) * 2.0
+    n = np.random.RandomState(seed).rand(h, w).astype(np.float32)
+    im = Image.fromarray((n * 255).astype(np.uint8))
+    sx = im.resize((max(1, w // 6), h), Image.BILINEAR).resize((w, h), Image.BILINEAR)
+    sy = im.resize((w, max(1, h // 3)), Image.BILINEAR).resize((w, h), Image.BILINEAR)
+    tex = (np.asarray(sx, dtype=np.float32) * 0.6 + np.asarray(sy, dtype=np.float32) * 0.4)
+    return tex / 255.0
+
+
+# ---------------- 深度模糊 DoF ----------------
+
+
+def post_dof(img, depth="bottom", focus=0.5, max_coc=14.0, bands=6):
+    """深度模糊（接 film.post）：按深度图分层 blur，越离焦越糊。
+
+    depth: (h,w) 数组 0..1（0=焦点处，1=最远）或预设 "bottom"（下近上远）/ "top" / "center"（中心实四周虚）。
+    focus: 焦点深度；max_coc: 最大弥散圆（像素）；bands: 分层数。
+    """
+    a = np.asarray(img).astype(np.float32)
+    h, w = a.shape[:2]
+    if isinstance(depth, str):
+        yy, xx = np.mgrid[0:h, 0:w]
+        if depth == "bottom":
+            d = 1.0 - yy / max(1, h - 1)          # 下近（深度 0）上远
+        elif depth == "top":
+            d = yy / max(1, h - 1)                # 上近下远
+        else:
+            d = np.sqrt(((xx - w / 2) / (w / 2)) ** 2 + ((yy - h / 2) / (h / 2)) ** 2) / 1.414
+        depth = np.clip(d, 0.0, 1.0)
+    else:
+        depth = np.asarray(depth, dtype=np.float32)
+    src = Image.fromarray(a.astype(np.uint8))
+    acc = np.zeros_like(a, dtype=np.float32)
+    wsum = np.zeros((h, w), dtype=np.float32)
+    centers = np.linspace(0.0, 1.0, bands)
+    bw = 1.6 / max(1, bands - 1)
+    for dk in centers:
+        r = max_coc * abs(float(dk) - focus)
+        if r < 0.7:
+            bl = np.asarray(src, dtype=np.float32)
+        else:
+            bl = np.asarray(src.filter(ImageFilter.GaussianBlur(radius=r)), dtype=np.float32)
+        wk = np.exp(-((depth - dk) / bw) ** 2).astype(np.float32)
+        acc += bl * wk[..., None]
+        wsum += wk
+    out = acc / np.maximum(wsum, 1e-6)[..., None]
+    return Image.fromarray(np.clip(out + 0.5, 0, 255).astype(np.uint8))
+
+
 def post_cinema(img, t, vignette=0.35, grain=0.035, ca=0.0, expo=1.0,
                 contrast=1.0, sat=1.0, lift=(0.0, 0.0, 0.0), gain=(1.0, 1.0, 1.0),
                 fps=30):
@@ -342,11 +455,13 @@ def post_cinema(img, t, vignette=0.35, grain=0.035, ca=0.0, expo=1.0,
     return Image.fromarray((np.clip(a, 0.0, 1.0) * 255).astype(np.uint8))
 
 
-def pixel8(c, arr, scale, cw=200, palette=None, alpha=1.0, dither=0.0, dither_mode="random"):
+def pixel8(c, arr, scale, cw=200, palette=None, alpha=1.0, dither=0.0, dither_mode="random",
+           cycle=0):
     """8-bit：底稿降采样 + 最近色板量化 + 最近邻放大（240×135 情怀）。
 
     距离在 int32 里算：int16 平方会溢出回绕成负数，argmin 选中垃圾颜色。
     dither: 抖动强度（0-1）；dither_mode: "random"（随机去色带）/"ordered"（Bayer 有序，像素风渐变）。
+    cycle: 调色板循环速度（每秒轮转几格，>0 时整幅色彩随 t 循环——瀑布/LED 流色）。
     """
     pal = np.array(palette or PIXEL_PAL, dtype=np.int32)
     cw = int(cw)
@@ -362,6 +477,10 @@ def pixel8(c, arr, scale, cw=200, palette=None, alpha=1.0, dither=0.0, dither_mo
             sa = sa + noise.astype(np.int32)
     dist = ((sa[:, None, :] - pal[None, :, :]) ** 2).sum(axis=2)
     idx = dist.argmin(axis=1)
+    if cycle > 0:
+        ct = getattr(getattr(c, "ctx", None), "t", 0.0) or 0.0
+        shift = int(ct * cycle) % len(pal)
+        idx = (idx + shift) % len(pal)
     quant = pal[idx].reshape(ch, cw, 3).astype(np.uint8)
     W = max(1, int(round(c.width * c.ss)))
     H = max(1, int(round(c.height * c.ss)))
