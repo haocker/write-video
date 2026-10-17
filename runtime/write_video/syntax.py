@@ -595,8 +595,8 @@ def y1_scale(cv, lt, spec):
     events = spec.get("cam_events", [])
     cam = cam_track(cam_at(W / 2, H / 2, 1.0), events, lt) if events else cam_at(W / 2, H / 2, 1.0)
     k = Cam(cv, **cam)
-    cx = spec.get("node_pos", (W / 2.0, H / 2.0 + 30.0 * u))[0]
-    cy = spec.get("node_pos", (W / 2.0, H / 2.0 + 30.0 * u))[1]
+    cx = spec.get("node_pos", (W / 2.0, H * 0.56))[0]
+    cy = spec.get("node_pos", (W / 2.0, H * 0.56))[1]
     R = 140.0 * u
     # 星（视差 d=0.05）
     ks = k.layer(0.05)
@@ -620,7 +620,7 @@ def y1_scale(cv, lt, spec):
     sats = spec.get("sats", [])[:4]
     n = len(sats)
     rx = min(W * 0.32, 640.0 * u)
-    ry = H * 0.36
+    ry = H * 0.27
     for i, sn in enumerate(sats):
         l = mo.clamp((lt - 1.0 - i * 0.3) / 1.0)
         if l <= 0:
@@ -661,7 +661,7 @@ def y1_scale(cv, lt, spec):
         else:
             fade = 1.0
         if shown > 0 and fade > 0.01:
-            k.text(title[:shown], W / 2, 130.0 * u, size=76.0 * u, color="#FFFFFF",
+            k.text(title[:shown], W / 2, 100.0 * u, size=72.0 * u, color="#FFFFFF",
                    bold=True, alpha=fade * mo.clamp(a0 * 2.2))
     # 高光变暗（cam_events 有 push 时其余元素变暗）
     if events:
@@ -821,7 +821,7 @@ def _y3_timeline(spec):
     strokes = []
     for bi, b in enumerate(spec.get("blocks", [])):
         at_ = b.get("at", 0.0)
-        y = 260.0 + bi * 300.0
+        y = 240.0 + bi * 170.0
         if b.get("text"):
             rate = 7.5 if bi == 0 else 16.0
             dur = len(b["text"]) / rate
@@ -1149,37 +1149,29 @@ def y5_type(cv, lt, spec):
         gs = lerp2(1.35, 1.0, gq)
         k.text(ghost, W - 60.0 * u + l * 14.0 * u, H - 100.0 * u - l * 10.0 * u,
                size=int(900.0 * u * gs), color=ink, alpha=0.12 * mo.clamp(l / 0.08))
-    # 主词砸入（缩放轴在字上方；字号自适配：峰值缩放 1.7 时也不溢出画布）
+    # 主词砸入（字号自适配：峰值缩放 1.7 时也不溢出画布）
     main = spec.get("main", "")
     if main:
         main_size = min(300.0 * u, W * 0.88 / max(1, len(main)) / 1.72)
         q = mo.spring_hz(l, 2.2, 10.0)
         sc = lerp2(1.7, 1.0, q)
         a = mo.clamp(l / 0.06)
-        oy = H * 0.42 - main_size * 0.36
         size = int(main_size * sc)
-        k.text(main, W / 2.0, oy + (H * 0.42 - oy) * sc / max(0.01, sc), size=size,
-               color=ink, bold=True, alpha=a)
-        # 荧光笔（重音拍后）
-        hl_at = spec.get("hl_at", 2.0)
-        hp = mo.expo_out(mo.clamp((l - hl_at) / 0.3))
+        k.text(main, W / 2.0, H * 0.42, size=size, color=ink, bold=True, alpha=a)
+        # 荧光笔（重音拍后；hl_at=None 关闭；对中盖住字）
+        hl_at = spec.get("hl_at", None)
+        hp = mo.expo_out(mo.clamp((l - hl_at) / 0.3)) if hl_at is not None else 0.0
         if hp > 0:
             acc = spec.get("accent", "#FFD23F")
             ww = (len(main) * main_size * 0.62) * hp
             base = tuple(int(ink[i:i + 2], 16) for i in (1, 3, 5)) if ink.startswith("#") else (255, 255, 255)
             hl_col = tuple(int(acc[i:i + 2], 16) for i in (1, 3, 5)) if acc.startswith("#") else (255, 210, 63)
-            if base == hl_col:
-                k.polygon([(W / 2.0 - ww / 2 + 12.0 * u, H * 0.42 - main_size * 0.86),
-                           (W / 2.0 + ww / 2 + 24.0 * u, H * 0.42 - main_size * 0.86),
-                           (W / 2.0 + ww / 2, H * 0.42 + main_size * 0.14),
-                           (W / 2.0 - ww / 2, H * 0.42 + main_size * 0.14)],
-                          fill=spec.get("bg", "#111111"), alpha=0.9, smooth=False)
-            else:
-                k.polygon([(W / 2.0 - ww / 2 + 12.0 * u, H * 0.42 - main_size * 0.86),
-                           (W / 2.0 + ww / 2 + 24.0 * u, H * 0.42 - main_size * 0.86),
-                           (W / 2.0 + ww / 2, H * 0.42 + main_size * 0.14),
-                           (W / 2.0 - ww / 2, H * 0.42 + main_size * 0.14)],
-                          fill=hl_col, alpha=0.9, smooth=False)
+            band_col = spec.get("bg", "#111111") if base == hl_col else hl_col
+            k.polygon([(W / 2.0 - ww / 2 + 12.0 * u, H * 0.42 - main_size * 0.55),
+                       (W / 2.0 + ww / 2 + 24.0 * u, H * 0.42 - main_size * 0.55),
+                       (W / 2.0 + ww / 2, H * 0.42 + main_size * 0.55),
+                       (W / 2.0 - ww / 2, H * 0.42 + main_size * 0.55)],
+                      fill=band_col, alpha=0.9, smooth=False)
     # 辅句槽升起
     subs = spec.get("sub", [])
     for i, ln in enumerate(subs):
@@ -1500,7 +1492,7 @@ def t3_chart(cv, lt, spec):
     n = len(data)
     if n == 0:
         return
-    F = (m + 20.0 * u, top + 40.0 * u, W - 2 * m - 40.0 * u, H - top - 40.0 * u - 190.0 * u)
+    F = (m + 20.0 * u, top + 40.0 * u, W - 2 * m - 40.0 * u, H - top - 40.0 * u - 120.0 * u)
     fx, fy, fw, fh = F
     hi = max(max(data), 0.0)
     lo = min(min(data), 0.0)
@@ -1508,6 +1500,8 @@ def t3_chart(cv, lt, spec):
     zero_based = kind == "bar" or lo <= 0 or (hi - lo) / max(1e-9, hi) > 0.6
     lo2 = 0.0 if zero_based else lo
     vals, tdec = _ticks(lo2 - (hi - lo2) * 0.08, hi + (hi - lo2) * 0.08)
+    if zero_based:
+        vals = [v for v in vals if v >= 0] or [0.0]
     vmin, vmax = min(vals), max(vals)
 
     def yv(v):
@@ -1542,7 +1536,7 @@ def t3_chart(cv, lt, spec):
             y0b, y1b = yv(0), yv(v * p)
             cv.rect(bx, min(y0b, y1b), bw2, abs(y1b - y0b), fill=col)
             if labels and i < len(labels):
-                cv.text(labels[i], bx + bw2 / 2, fy + fh + 40.0 * u, size=26.0 * u,
+                cv.text(labels[i], bx + bw2 / 2, fy + fh + 32.0 * u, size=26.0 * u,
                         color="#3a4246", alpha=mo.clamp(p * 2))
     else:
         # 折线按 x smooth 推进
@@ -1592,8 +1586,8 @@ def t3_chart(cv, lt, spec):
         t_hit = 1.3 + ch.get("dur", 1.6) * mo.invert(mo.smooth, (xi + 0.5) / n)
         if lt > t_hit:
             slot = fw / n
-            pt = (fx + slot * (xi + 0.5), yv(data[xi]) - 30.0 * u)
-            cv.lines([(pt[0], yv(data[xi]) - 8.0 * u), (pt[0], pt[1] + 16.0 * u)],
+            pt = (fx + slot * (xi + 0.5), yv(data[xi]) - 64.0 * u)
+            cv.lines([(pt[0], yv(data[xi]) - 6.0 * u), (pt[0], pt[1] + 14.0 * u)],
                      color=ink, width=2.0)
             cv.text(ev.get("text", ""), pt[0], pt[1] - 24.0 * u, size=30.0 * u, color=ink)
     # 大数字（提前 0.9s 滚动，at=落定）
@@ -1605,5 +1599,5 @@ def t3_chart(cv, lt, spec):
                     fy - 62.0 * u, size=120.0 * u, color=red, bold=True, align="right")
     # 来源
     if spec.get("source"):
-        cv.text(spec.get("source"), m, H - 60.0 * u, size=22.0 * u, color="#7c868b",
+        cv.text(spec.get("source"), m, H - 48.0 * u, size=22.0 * u, color="#7c868b",
                 align="left", alpha=p0)
