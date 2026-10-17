@@ -727,6 +727,31 @@ class Canvas(object):
         else:
             by = yi - h / 2
         fill = self._fill(color, alpha)
+        if alpha < 0.999:
+            # PIL 文字不与底混合（glyph 直接写 source alpha，拍平后变实心）：
+            # 半透明文字先渲到临时层（全 α），再按 alpha 合成
+            tmp = Image.new("RGBA", (int(round(w)) + 8, int(round(h)) + 8), (0, 0, 0, 0))
+            dt = ImageDraw.Draw(tmp)
+            for i, ln in enumerate(lines):
+                if not ln:
+                    continue
+                if align == "left":
+                    lx = 4.0
+                elif align == "right":
+                    lx = 4.0 + (w - widths[i])
+                else:
+                    lx = 4.0 + (w - widths[i]) / 2
+                dt.text((int(round(lx)), int(round(4.0 + i * step))), ln, font=f,
+                        fill=self._fill(color, 1.0))
+            if alpha < 0.999:
+                alpha_ch = tmp.getchannel("A").point(lambda v: int(round(v * clamp(alpha, 0.0, 1.0))))
+                tmp.putalpha(alpha_ch)
+            px0, py0 = int(round(bx - 4.0)), int(round(by - 4.0))
+            if self.img.mode == "RGBA":
+                self.img.alpha_composite(tmp, (px0, py0))
+            else:
+                self.img.paste(tmp, (px0, py0), tmp)
+            return (w / self.ss, h / self.ss)
         for i, ln in enumerate(lines):
             if not ln:
                 continue
