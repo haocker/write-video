@@ -19,7 +19,7 @@
 | `y3_board` | 白板手绘 RSA | blocks（text/lines）/accent | 说一句写一句，相机跟论证走，最后拉远看全图；马克笔只在画时入画 |
 | `y4_story` | 故事型简笔角色 | shots（mid/insert/react/wide/close） | 口播是主角：姿势 0.1s 快切后定住（squash 回弹），反应特写闭嘴+汗滴 |
 | `y5_type` | 动态文字 | bg/ink/main/sub/tag/ghost | 主词踩重音砸入（springHz 2.2/10），辅句槽升起，画面永远一个焦点 |
-| `t1_math` | 3Blue1Brown | concepts（grid/write/morph/neurons/indicate） | 纯黑底+高饱和细线，Transform 把上一个概念直接变成下一个（morph 点列对齐） |
+| `t1_math` | 3Blue1Brown | concepts（grid/write/morph/neurons/indicate） | 纯黑底+高饱和细线，Transform 把上一个概念直接变成下一个（morph 点列对齐）；分场淡出：下一个概念开始时旧概念整体 0.45s 退场，同屏只有一层 |
 | `t2_keynote` | 发布会界面 | block（title/number/shot） | 一屏一件事，光斑底，名词数字口播说到时落定（expo_out 计数） |
 | `t3_chart` | 财经图表 | chart（bar/line）/event/number | 先坐标系再数据最后只标一件事；折线按 x smooth 推进，标注在线头经过事件点时弹出 |
 

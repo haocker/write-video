@@ -1230,7 +1230,8 @@ def _t1_morph(A, B, p):
 
 def t1_math(cv, lt, spec):
     """t1 3b1b：纯黑底 + Write/Transform/神经元/Indicate。spec:
-    {"title"?, "concepts": [{"kind":"write"|"morph"|"neurons"|"grid"|"indicate", ...}]}"""
+    {"title"?, "concepts": [{"kind":"write"|"morph"|"neurons"|"grid"|"indicate", ...}]}
+    分场习惯：下一个概念开始时，旧概念整体淡出（0.45s），屏幕上始终只有一层。"""
     W, H = cv.width, cv.height
     u = W / 1920.0
     U = H / 8.0
@@ -1240,10 +1241,18 @@ def t1_math(cv, lt, spec):
         tp = mo.clamp((lt - 0.2) / 0.8)
         cv.text(title, W / 2.0, 140.0 * u, size=66.0 * u, color="#FFFFFF", alpha=tp)
     cy0 = H * 0.55
-    for ci, cpt in enumerate(spec.get("concepts", [])):
+    cpts = spec.get("concepts", [])
+    for ci, cpt in enumerate(cpts):
         at_ = cpt.get("at", 0.0)
         dur = cpt.get("dur", 1.5)
         kind = cpt.get("kind", "write")
+        if ci + 1 < len(cpts):
+            until = cpts[ci + 1].get("at", at_ + dur + 1.0)
+        else:
+            until = at_ + dur + cpt.get("hold", 1.2)
+        kf = 1.0 - mo.smooth(mo.clamp((lt - until) / 0.45))
+        if kf <= 0:
+            continue
         if kind == "grid":
             gq = mo.smooth(mo.clamp((lt - at_) / 0.8))
             if gq <= 0:
@@ -1252,12 +1261,12 @@ def t1_math(cv, lt, spec):
                 p = mo.lagged(gi, 9, gq, 0.1)
                 y = cy0 - U * 2 + gi * (U * 4 / 8.0)
                 cv.lines([(W * 0.3, y), (W * 0.3 + W * 0.4 * p, y)], color="#FFFFFF",
-                         width=2.0, alpha=0.25)
+                         width=2.0, alpha=0.25 * kf)
             for gi in range(9):
                 p = mo.lagged(gi, 9, gq, 0.1)
                 x = W * 0.3 + gi * (W * 0.4 / 8.0)
                 cv.lines([(x, cy0 - U * 2), (x, cy0 - U * 2 + U * 4 * p)], color="#FFFFFF",
-                         width=2.0, alpha=0.25)
+                         width=2.0, alpha=0.25 * kf)
         elif kind == "write":
             wq = mo.clamp((lt - at_) / dur)
             if wq <= 0:
@@ -1266,7 +1275,7 @@ def t1_math(cv, lt, spec):
             n = len(txt)
             shown = int(mo.lagged(0, 1, wq, 0.0) * n + 0.999)
             cv.text(txt[:shown], W / 2.0, cy0 - U * 2.6, size=66.0 * u,
-                    color=cpt.get("col", "#FFFFFF"), alpha=mo.clamp(wq * 2.2))
+                    color=cpt.get("col", "#FFFFFF"), alpha=mo.clamp(wq * 2.2) * kf)
         elif kind == "morph":
             mq = mo.smooth(mo.clamp((lt - at_) / dur))
             if mq <= 0:
@@ -1279,13 +1288,15 @@ def t1_math(cv, lt, spec):
                 else _t1_circle_pts(cx2, cy0, U * 1.4)
             pts = _t1_morph(A, B, mq)
             col = _t1_manim_mix(cpt.get("ca", "blue"), cpt.get("cb", "teal"), mq)
-            cv.polygon(pts + [pts[0]], fill=col, alpha=0.18 * mq)
-            cv.polygon(pts + [pts[0]], outline=col, width=4.0)
+            cv.polygon(pts + [pts[0]], fill=col, alpha=0.18 * mq * kf)
+            cv.polygon(pts + [pts[0]],
+                       outline=(int(col[0] * kf), int(col[1] * kf), int(col[2] * kf)),
+                       width=4.0)
             lbl_a = cpt.get("la", "")
             lbl_b = cpt.get("lb", "")
             if lbl_a or lbl_b:
-                cv.text(lbl_b if mq > 0.5 else lbl_a, cx2, cy0 + U * 2.2, size=50.0 * u,
-                        color=col, alpha=mo.clamp(mq * 2 if mq > 0.5 else (1 - mq * 2)))
+                cv.text(lbl_b if mq > 0.5 else lbl_a, cx2, cy0 + U * 2.75, size=50.0 * u,
+                        color=col, alpha=mo.clamp(mq * 2 if mq > 0.5 else (1 - mq * 2)) * kf)
         elif kind == "neurons":
             nq = mo.clamp((lt - at_) / dur)
             if nq <= 0:
@@ -1311,7 +1322,8 @@ def t1_math(cv, lt, spec):
                             r_n = U * 0.15
                             a2 = (A[0] + dx2 / dl * r_n, A[1] + dy2 / dl * r_n)
                             b2 = (B[0] - dx2 / dl * r_n, B[1] - dy2 / dl * r_n)
-                            cv.lines([a2, b2], color=col, width=lw2, alpha=0.7 * mo.clamp(ei))
+                            cv.lines([a2, b2], color=col, width=lw2,
+                                     alpha=0.7 * mo.clamp(ei) * kf)
             # 神经元（填充不透明度=激活值）
             for li, layer in enumerate(pos):
                 ni = mo.lagged(li, len(layers), nq, 0.12)
@@ -1319,15 +1331,19 @@ def t1_math(cv, lt, spec):
                     act = cpt.get("acts", lambda l2, a: 0.35 + 0.55 * math.sin(l2 * 2.1 + a * 1.3) * 0.5 + 0.3)(
                         li, ai)
                     cv.circle(A[0], A[1], U * 0.15,
-                              fill=(255, 255, 255), alpha=mo.clamp(abs(act)) * mo.clamp(ni),
-                              outline="#FFFFFF", width=2.0)
+                              fill=(255, 255, 255),
+                              alpha=mo.clamp(abs(act)) * mo.clamp(ni) * kf,
+                              outline=(int(255 * kf), int(255 * kf), int(255 * kf)),
+                              width=2.0)
         elif kind == "indicate":
             iq = mo.clamp((lt - at_) / 0.8)
             if iq <= 0 or iq >= 1:
                 continue
             tgt = cpt.get("target", (W / 2.0, cy0))
             s = 1.0 + 0.2 * mo.there_and_back(iq)
-            cv.ellipse(tgt[0], tgt[1], U * 0.3 * s, U * 0.3 * s, outline=_T1_MANIM["yellow"],
+            oc = _T1_MANIM["yellow"]
+            cv.ellipse(tgt[0], tgt[1], U * 0.3 * s, U * 0.3 * s,
+                       outline=(int(oc[0] * kf), int(oc[1] * kf), int(oc[2] * kf)),
                        width=4.0)
 
 
