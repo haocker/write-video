@@ -53,7 +53,7 @@
 
 | 卡 | 风格 | 技术 | 可移植性 | wv 对应 |
 |---|---|---|---|---|
-| handdrawn | 逐帧手绘 | Canvas 2D | 部分可移植 | 手绘管线＋需 G-buffer→水彩/排线风格化 pass |
+| handdrawn | 逐帧手绘 | Canvas 2D | 已移植（2.5D 解析投影版） | 迷你 3D 渲染器（盒体建模/画家算法/朗伯/凸包投影+排线/瓦片参数化/告示板树），样片 /workspace/handdrawn01/film.py；卡内附坑清单 |
 | isometric | 等轴 2.5D 小城 | Canvas 2D | 直接可移植 | 图元直绘（正交投影/凸包阴影/glow） |
 | flat-zoom | 无限推进 | Canvas 2D | 直接可移植 | 图元直绘＋递归 clip/scale 对数缩放 |
 | lineart | 金线山脊 | Canvas 2D | 直接可移植 | 手绘管线 polyline+lighter |
@@ -78,4 +78,4 @@
 
 - ★★★ 20 种、★★ 14 种、★ 1 种（huashu 侧）。
 - **最普遍的短板是角色**：背景过了风格渲染器就像那个风格，角色只用矢量骨架平涂就像贴上去的。下一轮提质先从「角色也过同一个渲染器／按该风格重塑造型」做起。
-- wv 侧需要新渲染器的汇总（已完成：texture 含 drag 竖向拖笔/brush 水粉刷痕、post_dof、post_cinema、post_vhs、post_bloom、post_warp 行列位移、post_gold 金色度遮罩、flowlines 流场长笔、leather 皮影皮件、softclock 软钟、longshadow 剪切长影、roman 马赛克 Hausner 简化版、ribbon、brush 毛笔、Bayer 抖动、cycle、pixel_text）：剩余 G-buffer→水彩/排线风格化 pass（handdrawn）、2D SDF 折射（glass）、立体主义 clip evenodd 羽化排线（kirby）、三缓冲高度场打光 pass（collage）——全部依赖 3D/WebGL 基建，建议跳过或降级近似；huashu 侧移植已齐装。
+- wv 侧需要新渲染器的汇总（已完成：texture 含 drag 竖向拖笔/brush 水粉刷痕、post_dof、post_cinema、post_vhs、post_bloom、post_warp 行列位移、post_gold 金色度遮罩、flowlines 流场长笔、leather 皮影皮件、softclock 软钟、longshadow 剪切长影、roman 马赛克 Hausner 简化版、ribbon、brush 毛笔、Bayer 抖动、cycle、pixel_text）；handdrawn 已用 2.5D 解析投影版移植（见 handdrawn.md 的"wv 2.5D 解析投影版"节与坑清单）；剩余 2D SDF 折射（glass）、立体主义 clip evenodd 羽化排线（kirby）、三缓冲高度场打光 pass（collage）——依赖 3D/WebGL 基建，建议跳过或降级近似；huashu 侧移植已齐装。
