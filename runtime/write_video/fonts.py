@@ -167,3 +167,47 @@ def load(kind="sans", size=48, index=0):
 def describe():
     """报告用：返回各类字体实际解析到的路径。"""
     return dict((k, find(k)) for k in _CANDIDATES)
+
+
+@lru_cache(maxsize=32)
+def covered_chars(kind):
+    """字体类别（或路径）→ 已覆盖字符集合（fontTools cmap）。
+
+    无 fontTools 时返回 None（跳过覆盖检查）。
+    """
+    if _is_font_path(kind):
+        path = kind
+    else:
+        result = find(kind)
+        if result is None:
+            return None
+        path = result[0]
+    try:
+        from fontTools.ttLib import TTFont
+        f = TTFont(path, fontNumber=0, lazy=True)
+        return frozenset(f.getBestCmap().keys())
+    except Exception:
+        return None
+
+
+_WARNED_GLYPHS = set()
+
+
+def warn_missing_glyphs(s, kind):
+    """PIL 对缺字形字符静默渲成空白/豆腐——每字符只告警一次。
+
+    正文字体（伟君黑/标题黑/喜脉体）缺 → ✓ 等符号字形；
+    符号/图标应改用 wv.icons.char("arrow-right") 或 font="tabler"。
+    """
+    chars = covered_chars(kind)
+    if chars is None:
+        return
+    text = str(s)
+    missing_cp = sorted({ord(c) for c in text if not c.isspace()} - chars - _WARNED_GLYPHS)
+    if not missing_cp:
+        return
+    _WARNED_GLYPHS.update(missing_cp)
+    label = os.path.basename(kind) if _is_font_path(kind) else kind
+    print("[write-video] 字体 %s 缺字形（静默渲染成空白）：%s —— "
+          "符号/图标请用 wv.icons.char(\"arrow-right\") 或 font=\"tabler\""
+          % (label, " ".join(chr(cp) for cp in missing_cp)))

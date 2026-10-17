@@ -703,6 +703,7 @@ class Canvas(object):
         px = max(1, int(round(size * self.ss)))
         kind = font or ("sans_bold" if bold else "sans")
         f = _fonts.load(kind, px)
+        _fonts.warn_missing_glyphs(s, kind)
         if max_width:
             w0 = max([f.getlength(ln) for ln in lines] or [0.0])
             if w0 > max_width * self.ss and w0 > 0:
