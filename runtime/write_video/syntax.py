@@ -829,7 +829,7 @@ def _y3_timeline(spec):
                             "text": b["text"], "x": 150.0, "rate": rate})
             at_ += dur + 0.03
         for li, raw in enumerate(b.get("lines", [])):
-            pts = [(p[0], p[1] + y - 150.0) for p in raw]
+            pts = [(150.0 + p[0], p[1] + y - 150.0) for p in raw]
             total = _cum_lens(pts)[-1]
             dur = max(0.04, total / 2600.0)
             strokes.append({"t0": at_, "t1": at_ + dur, "kind": "line", "pts": pts,
@@ -847,17 +847,18 @@ def y3_board(cv, lt, spec):
     accent = spec.get("accent", "#EF7226")
     strokes = _y3_timeline(spec)
     last_end = max([s["t1"] for s in strokes], default=2.0)
-    # 相机：内容超带下移 0.6s；收尾拉远
+    # 相机：内容超带下移 0.6s（时间门控：在该块开写前 0.6s 才移）；收尾拉远
     band_top, band_bot = 140.0, H - 140.0
     cy0, z0 = H / 2.0, 1.0
-    need = 0.0
-    for s in strokes:
-        if s.get("y", 0) + 70.0 > band_bot and s["t0"] > lt - 0.6:
-            pass
     cur_y = 0.0
     for s in strokes:
-        if s.get("y", 0) + 70.0 > band_bot:
-            cur_y = max(cur_y, s["y"] + 70.0 - band_bot)
+        yb = s.get("y")
+        if yb is not None and yb + 70.0 > band_bot:
+            act = s["t0"] - 0.6
+            if lt >= act:
+                need = yb + 70.0 - band_bot
+                r = mo.sine_in_out(mo.clamp((lt - act) / 0.6))
+                cur_y = max(cur_y, need * r)
     pull = mo.sine_in_out(mo.clamp((lt - last_end - 0.1) / 0.8))
     z = cam_zlerp(1.0, min(0.94, (band_bot - band_top) / max(1.0, (cur_y + H)) * 0.96), pull)
     cy = lerp2(cy0 + cur_y * 0.5, H / 2.0 - (cur_y / 2.0) * z, pull) + cur_y * (1.0 - pull) * 0.5
@@ -1148,14 +1149,15 @@ def y5_type(cv, lt, spec):
         gs = lerp2(1.35, 1.0, gq)
         k.text(ghost, W - 60.0 * u + l * 14.0 * u, H - 100.0 * u - l * 10.0 * u,
                size=int(900.0 * u * gs), color=ink, alpha=0.12 * mo.clamp(l / 0.08))
-    # 主词砸入（缩放轴在字上方）
+    # 主词砸入（缩放轴在字上方；字号自适配：峰值缩放 1.7 时也不溢出画布）
     main = spec.get("main", "")
     if main:
+        main_size = min(300.0 * u, W * 0.88 / max(1, len(main)) / 1.72)
         q = mo.spring_hz(l, 2.2, 10.0)
         sc = lerp2(1.7, 1.0, q)
         a = mo.clamp(l / 0.06)
-        oy = H * 0.42 - 300.0 * u * 0.36
-        size = int(300.0 * u * sc)
+        oy = H * 0.42 - main_size * 0.36
+        size = int(main_size * sc)
         k.text(main, W / 2.0, oy + (H * 0.42 - oy) * sc / max(0.01, sc), size=size,
                color=ink, bold=True, alpha=a)
         # 荧光笔（重音拍后）
@@ -1163,20 +1165,20 @@ def y5_type(cv, lt, spec):
         hp = mo.expo_out(mo.clamp((l - hl_at) / 0.3))
         if hp > 0:
             acc = spec.get("accent", "#FFD23F")
-            ww = (len(main) * 300.0 * u * 0.62) * hp
+            ww = (len(main) * main_size * 0.62) * hp
             base = tuple(int(ink[i:i + 2], 16) for i in (1, 3, 5)) if ink.startswith("#") else (255, 255, 255)
             hl_col = tuple(int(acc[i:i + 2], 16) for i in (1, 3, 5)) if acc.startswith("#") else (255, 210, 63)
             if base == hl_col:
-                k.polygon([(W / 2.0 - ww / 2 + 12.0 * u, H * 0.42 - 300.0 * u * 0.86),
-                           (W / 2.0 + ww / 2 + 24.0 * u, H * 0.42 - 300.0 * u * 0.86),
-                           (W / 2.0 + ww / 2, H * 0.42 + 300.0 * u * 0.14),
-                           (W / 2.0 - ww / 2, H * 0.42 + 300.0 * u * 0.14)],
+                k.polygon([(W / 2.0 - ww / 2 + 12.0 * u, H * 0.42 - main_size * 0.86),
+                           (W / 2.0 + ww / 2 + 24.0 * u, H * 0.42 - main_size * 0.86),
+                           (W / 2.0 + ww / 2, H * 0.42 + main_size * 0.14),
+                           (W / 2.0 - ww / 2, H * 0.42 + main_size * 0.14)],
                           fill=spec.get("bg", "#111111"), alpha=0.9, smooth=False)
             else:
-                k.polygon([(W / 2.0 - ww / 2 + 12.0 * u, H * 0.42 - 300.0 * u * 0.86),
-                           (W / 2.0 + ww / 2 + 24.0 * u, H * 0.42 - 300.0 * u * 0.86),
-                           (W / 2.0 + ww / 2, H * 0.42 + 300.0 * u * 0.14),
-                           (W / 2.0 - ww / 2, H * 0.42 + 300.0 * u * 0.14)],
+                k.polygon([(W / 2.0 - ww / 2 + 12.0 * u, H * 0.42 - main_size * 0.86),
+                           (W / 2.0 + ww / 2 + 24.0 * u, H * 0.42 - main_size * 0.86),
+                           (W / 2.0 + ww / 2, H * 0.42 + main_size * 0.14),
+                           (W / 2.0 - ww / 2, H * 0.42 + main_size * 0.14)],
                           fill=hl_col, alpha=0.9, smooth=False)
     # 辅句槽升起
     subs = spec.get("sub", [])
