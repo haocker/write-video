@@ -151,6 +151,8 @@ score.fade(out_seconds=2.5)                   # 片尾淡出
 film.music = score
 ```
 
+**坑：`film.music` 必须拿到 `wa.Song` 对象本身。** `sc.render(lufs=…)` 的返回值是渲染报告 dict，把它赋给 `film.music` 会被混音器静默跳过（成片只剩音效、没有配乐）。响度交给混音器处理：`film.music = {"score": song, "gain": -2.0}`（render_score 按 -14 LUFS 渲 + gain dB）。
+
 **乐谱 API（`wv.wa`）**
 
 | 用途 | 写法 |

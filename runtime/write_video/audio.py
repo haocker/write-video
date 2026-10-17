@@ -528,6 +528,10 @@ def mix_tracks(film):
             if data is not None and len(data):
                 reps = int(math.ceil(n / float(len(data))))
                 mix += np.tile(data, reps)[:n] * (10.0 ** (gain / 20.0))
+        else:
+            print("[write-video] film.music 未被识别（%s）——配乐已跳过；"
+                  "score 需传 wa.Song 对象（勿传 sc.render() 的报告 dict）或音频文件路径"
+                  % (type(m).__name__,))
     if voices:
         mix *= _build_duck(n, voices)
         for v in voices:
