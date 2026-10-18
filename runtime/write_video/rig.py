@@ -201,7 +201,11 @@ class SpriteSkin:
             a = math.radians(deg)
             ca, sa = math.cos(a), math.sin(a)
             w, h = im.size
-            rot = im.rotate(deg, resample=Image.BICUBIC, expand=True)
+            # PIL rotate(θ) 在屏幕上逆时针转 θ（内容顺时针角 α 变为 α−θ）；
+            # 部件内容朝下画（α=90），要转到骨骼世界角 W：90−θ=W → θ=90−W，
+            # 即 rotate(-(W-90))；配合 rot_off=-90 即 rotate(-deg)。
+            rot = im.rotate(-deg, resample=Image.BICUBIC, expand=True)
+            # pivot 偏移随内容做同样的顺时针旋转（y 向下矩阵 [[cos,−sin],[sin,cos]]，φ=+deg）
             npx = (px - w / 2.0) * ca - (py - h / 2.0) * sa + rot.width / 2.0
             npy = (px - w / 2.0) * sa + (py - h / 2.0) * ca + rot.height / 2.0
             wox = ox * ca - oy * sa
