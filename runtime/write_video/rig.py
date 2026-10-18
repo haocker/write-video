@@ -201,10 +201,9 @@ class SpriteSkin:
             a = math.radians(deg)
             ca, sa = math.cos(a), math.sin(a)
             w, h = im.size
-            rot = im.rotate(-deg, resample=Image.BICUBIC, expand=True)
-            c, s_ = math.cos(-a), math.sin(-a)
-            npx = (px - w / 2.0) * c - (py - h / 2.0) * s_ + rot.width / 2.0
-            npy = (px - w / 2.0) * s_ + (py - h / 2.0) * c + rot.height / 2.0
+            rot = im.rotate(deg, resample=Image.BICUBIC, expand=True)
+            npx = (px - w / 2.0) * ca - (py - h / 2.0) * sa + rot.width / 2.0
+            npy = (px - w / 2.0) * sa + (py - h / 2.0) * ca + rot.height / 2.0
             wox = ox * ca - oy * sa
             woy = ox * sa + oy * ca
             sc = scale * ss

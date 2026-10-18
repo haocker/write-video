@@ -153,7 +153,7 @@ cv.polygon(xform(pts, head_center, tilt), ...)   # 局部点集 → 旋转+平�
   {"bone": "arm_l", "png": "part_arm_l.png", "z": 2, "pivot": [11, 0], "rot_off": -90}]}
 ```
 
-**装配坑三条**：① 部件以"所属骨骼 origin"为锚渲染——部件图里 pivot 那个像素对准骨骼 origin，输出统一缩放到骨骼尺度；② 悬挂部件（臂/腿）内容朝下画时 `rot_off=-90`（图像旋转后内容指向 = 90+deg，要对准骨骼方向需 deg=world−90）；朝上内容（头挂竖直脊柱）`rot_off=+90`；③ SpriteSkin 全程按画布设备像素（cv.ss）换算——设计像素 origin/offset 乘 ss、部件 px 乘 scale×ss，混用会整体缩一半且错位。部件自带的脖子画进 head 部件（随头倾斜），画进 torso 会在头倾斜时露边。
+**装配坑四条**：① 部件以"所属骨骼 origin"为锚渲染——部件图里 pivot 那个像素对准骨骼 origin，输出统一缩放到骨骼尺度；② 悬挂部件（臂/腿）内容朝下画时 `rot_off=-90`（图像旋转后内容指向 = 90+deg，要对准骨骼方向需 deg=world−90）；朝上内容（头挂竖直脊柱）`rot_off=+90`；③ SpriteSkin 全程按画布设备像素（cv.ss）换算——设计像素 origin/offset 乘 ss、部件 px 乘 scale×ss，混用会整体缩一半且错位；④ 旋转方向：PIL `rotate(θ)` 使内容屏幕角 +θ（顺时针为正，y 向下），部件内 `rotate(deg)` 配 pivot 重算矩阵 `[[cos,−sin],[sin,cos]]`（φ=+deg）——用 `rotate(-deg)` 会镜像旋转方向（挥手臂指向头后而非头旁）。部件自带的脖子画进 head 部件（随头倾斜），画进 torso 会在头倾斜时露边。肩关节 off_w 要把关节放进袖子覆盖区（袖口只到背心下沿），放肩线外侧会悬空长出。
 
 ### 配乐（只渲染，不含模板）
 
