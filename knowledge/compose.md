@@ -124,6 +124,28 @@ error / riser / glitch / sparkle / notification / typing / bassdrop / shutter
 - `gain` 单位 dB（-6 = 轻一半）；`dur` 覆盖时长；`pitch` 半音数。
 - 对齐手法：命中前放 `riser`（dur = 到命中的间隔），命中点放 `impact`；`at` 就是那个命中的数。
 
+### 骨骼动画（`wv.rig`）
+
+骨骼层级 + FK + 关键帧轨道，皮肤为 2.5D 图元挂骨骼（球体/胶囊/多边形）。参考实现见 `rig-demo/film.py`（Q 版角色走路/挥手/待机）。
+
+```python
+from write_video.rig import Bone, Rig, Track, capsule, xform
+
+rig = Rig((root_x, root_y), [              # root=髋部世界锚点
+    Bone("root", None, 0, 0),              # rest=相对父骨静止角；y 向下：-90=上 90=下
+    Bone("spine", "root", 113, -90),
+    Bone("head", "neck", 80, 0),
+    Bone("arm_l", "spine", 44, 190, off_w=(-63, -19)),   # off_w=相对父骨末端的世界固定偏移
+    ...])
+IDLE = Track({"spine": [(0, 0), (1.2, 2.5), (2.4, 0)]}, dur=2.4, loop=True)
+pose = {**IDLE.at(t)}                      # 多轨叠加：后者按骨覆盖
+xf = rig.solve(pose, root=(x, y))          # → {bone: (origin, end, world_deg, z)}
+capsule(cv, xf["arm_l"][0], xf["arm_l"][1], r, skin, skin_sh, skin_hi)   # 2.5D 胶囊
+cv.polygon(xform(pts, head_center, tilt), ...)   # 局部点集 → 旋转+平移
+```
+
+**坑：皮肤旋转只用姿态偏移（tilt），骨骼世界角是骨骼指向**——head 骨世界角恒 ≈ −90（指向上），脸/头发按世界角旋转会整体转 90°；tilt = world_deg − rest 链（或 world_deg + 90 对竖直脊柱）。鞋子同理（shin 世界角 −90）。
+
 ### 配乐（只渲染，不含模板）
 
 配乐**没有风格模板**——引擎只做渲染，编曲由你（AI）自己写。用 `wv.wa` 构造一份乐谱，赋给 `film.music`：
