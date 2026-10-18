@@ -146,6 +146,15 @@ cv.polygon(xform(pts, head_center, tilt), ...)   # 局部点集 → 旋转+平�
 
 **坑：皮肤旋转只用姿态偏移（tilt），骨骼世界角是骨骼指向**——head 骨世界角恒 ≈ −90（指向上），脸/头发按世界角旋转会整体转 90°；tilt = world_deg − rest 链（或 world_deg + 90 对竖直脊柱）。鞋子同理（shin 世界角 −90）。
 
+**装配层（PNG 部件挂骨）**：`SpriteSkin` 把透明 PNG 部件装到骨骼上（cutout/纸片人皮肤），每帧按骨骼变换贴图（PIL rotate+expand，pivot 对准骨骼 origin）。JSON 装配文件一体存取：`rig, skin, tracks = wv.rig.load_rig("boy.rig.json")`（结构：root/bones/skin.parts/tracks，`save_rig` 对称写回）。
+
+```json
+"skin": {"parts": [
+  {"bone": "arm_l", "png": "part_arm_l.png", "z": 2, "pivot": [11, 0], "rot_off": -90}]}
+```
+
+**装配坑三条**：① 部件以"所属骨骼 origin"为锚渲染——部件图里 pivot 那个像素对准骨骼 origin，输出统一缩放到骨骼尺度；② 悬挂部件（臂/腿）内容朝下画时 `rot_off=-90`（图像旋转后内容指向 = 90+deg，要对准骨骼方向需 deg=world−90）；朝上内容（头挂竖直脊柱）`rot_off=+90`；③ SpriteSkin 全程按画布设备像素（cv.ss）换算——设计像素 origin/offset 乘 ss、部件 px 乘 scale×ss，混用会整体缩一半且错位。部件自带的脖子画进 head 部件（随头倾斜），画进 torso 会在头倾斜时露边。
+
 ### 配乐（只渲染，不含模板）
 
 配乐**没有风格模板**——引擎只做渲染，编曲由你（AI）自己写。用 `wv.wa` 构造一份乐谱，赋给 `film.music`：
