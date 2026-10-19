@@ -126,7 +126,7 @@ error / riser / glitch / sparkle / notification / typing / bassdrop / shutter
 
 ### Spine 素材（官方运行时）
 
-三条管线，按需选：
+两条管线，按需选：
 
 **① node-canvas 直渲（推荐，无浏览器）**：`runtime/spine-node/spine_render.js`（spine-canvas 4.2.119 + node-canvas 3，`npm install` 装依赖）——`createPlayer()` 返回 setAnimation/seek/draw/toBuffer，~110ms/帧@1080p，ffmpeg 合 MP4。四坑：
 - `state.setAnimation(track, name, loop)` 只收**名字字符串**，传 Animation 对象报 "Animation not found: [object Object]"
@@ -145,51 +145,7 @@ error / riser / glitch / sparkle / notification / typing / bassdrop / shutter
 
 **② 浏览器满血渲染**：`spine-player/index.html`（widget 从 unpkg CDN 加载，本地素材经 http.server 提供）；视频管线 `spine_to_video.py`（playwright 逐帧 seek + 截图 → ffmpeg），`config.app.update/render` 回调注入时间控制。大坑：`player.time` 是 TimeKeeper 对象，覆盖成数字整个渲染循环崩；seek 只用 `entry.trackTime`；`getCurrent` 不存在（用 `expandToIndex(0)`）。
 
-**③ 轻量 Python 导入（`wv.spine_io`）**：官方 spine-runtimes 示例素材直接可吃：
-
-```python
-from write_video.spine_io import SpineSkeleton
-sk = SpineSkeleton("spineboy-pro.json", "spineboy-pma.atlas")   # png 与 json 同目录自动找
-sk.draw(cv, anim="run", t=1.2, scale=0.5, cx=640, cy=640)       # scale=骨架逻辑单位→像素
-sk.anim_time("run")                                             # 动画时长（循环取模用）
-```
-
-支持：bones 完整仿射 FK、时间线（linear/stepped/贝塞尔）、slots 绘制顺序与 attachment 切换、region 贴图、mesh 按紧裁剪 region 渲染、PMA 反预乘、y 翻转。坑：① atlas 有 `scale: 0.5` 时 attachment 的 width/height 是逻辑尺寸；② PMA 必须反预乘；③ mesh 是加权顶点（v1 按 region 四边形渲染）；④ 骨骼 origin=父骨骼 origin+R(父世界角)·(x,y)；⑤ 粘贴按画布设备像素（cv.ss）换算。
-
 **版本配套**：运行时与数据版本严格同 minor（4.2.119 配 4.2.22 ✓；3.8/4.0 数据不通用）。node 端 4.3 无稳定包（用浏览器管线）；官方 spine-runtimes 3.8 分支素材在 `export/` 子目录。
-
-### 骨骼动画（`wv.rig`）
-
-骨骼层级 + FK + 关键帧轨道，皮肤为 2.5D 图元挂骨骼（球体/胶囊/多边形）。参考实现见 `rig-demo/film.py`（Q 版角色走路/挥手/待机）。
-
-```python
-from write_video.rig import Bone, Rig, Track, capsule, xform
-
-rig = Rig((root_x, root_y), [              # root=髋部世界锚点
-    Bone("root", None, 0, 0),              # rest=相对父骨静止角；y 向下：-90=上 90=下
-    Bone("spine", "root", 113, -90),
-    Bone("head", "neck", 80, 0),
-    Bone("arm_l", "spine", 44, 190, off_w=(-63, -19)),   # off_w=相对父骨末端的世界固定偏移
-    ...])
-IDLE = Track({"spine": [(0, 0), (1.2, 2.5), (2.4, 0)]}, dur=2.4, loop=True)
-pose = {**IDLE.at(t)}                      # 多轨叠加：后者按骨覆盖
-xf = rig.solve(pose, root=(x, y))          # → {bone: (origin, end, world_deg, z)}
-capsule(cv, xf["arm_l"][0], xf["arm_l"][1], r, skin, skin_sh, skin_hi)   # 2.5D 胶囊
-cv.polygon(xform(pts, head_center, tilt), ...)   # 局部点集 → 旋转+平移
-```
-
-**坑：皮肤旋转只用姿态偏移（tilt），骨骼世界角是骨骼指向**——head 骨世界角恒 ≈ −90（指向上），脸/头发按世界角旋转会整体转 90°；tilt = world_deg − rest 链（或 world_deg + 90 对竖直脊柱）。鞋子同理（shin 世界角 −90）。
-
-**装配层（PNG 部件挂骨）**：`SpriteSkin` 把透明 PNG 部件装到骨骼上（cutout/纸片人皮肤），每帧按骨骼变换贴图（PIL rotate+expand，pivot 对准骨骼 origin）。JSON 装配文件一体存取：`rig, skin, tracks = wv.rig.load_rig("boy.rig.json")`（结构：root/bones/skin.parts/tracks，`save_rig` 对称写回）。
-
-```json
-"skin": {"parts": [
-  {"bone": "arm_l", "png": "part_arm_l.png", "z": 2, "pivot": [11, 0], "rot_off": -90}]}
-```
-
-**装配坑四条**：① 部件以"所属骨骼 origin"为锚渲染——部件图里 pivot 那个像素对准骨骼 origin，输出统一缩放到骨骼尺度；② 悬挂部件（臂/腿）内容朝下画时 `rot_off=-90`（内容顺时针角 α=90+deg=世界角 ✓）；朝上内容（头挂竖直脊柱）`rot_off=+90`；③ SpriteSkin 全程按画布设备像素（cv.ss）换算——设计像素 origin/offset 乘 ss、部件 px 乘 scale×ss，混用会整体缩一半且错位；④ **旋转方向（必须成对）**：PIL `rotate(θ)` 在屏幕上是逆时针（内容顺时针角 α 变 α−θ），部件内容朝下画（α=90）要转到世界角 W 需 `rotate(-(W-90))`，配 rot_off=-90 即 **`rotate(-deg)`**；pivot 偏移必须随内容做**同向**旋转（y 向下矩阵 `[[cos,−sin],[sin,cos]]`，φ=+deg）。图像用 `rotate(deg)` 或 pivot 用 φ=−deg 都会镜像方向（手臂上翘/指向头后）——**孤立符号测试**（单骨已知角度渲一帧量末端坐标）验证通过再上机。部件自带的脖子画进 head 部件（随头倾斜），画进 torso 会在头倾斜时露边。肩关节 off_w 要把关节放进袖子覆盖区，放肩线外侧会悬空长出。
-
-**正面视角走路 = 踏步（march），不是摆腿**：正面没法表现前后迈步，大腿摆 ±20° 会让四肢外撇成倒八字。正确做法：大腿摆幅 ≤±6°，做功交给膝盖（小腿交替弯折 ±30 抬脚，左膝 t=0.25、右膝 t=0.75）。**手臂机制：肩关节固定（sleeve 静止盖住关节），上臂微转 ±4°，前臂放大摆 ±16° 且相位滞后 0.12 周期（鞭梢效应，上臂带动小臂）**——前臂摆幅是上臂的 2-4 倍才有"带动"感。**pivot 改部件几何后必须同步**：部件内容一动 pivot 就变，用"渲染脚本渲完自动把实测 pivot 写回装配 JSON"（单一事实来源）防失配。
 
 ### 配乐（只渲染，不含模板）
 

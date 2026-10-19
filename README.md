@@ -32,7 +32,7 @@
 - **招牌画面信手拈来**：`s.draw(fn)` 用画布 API 直接画（光晕、弧线、火花、弹簧、粒子…），给出这支片独有的视觉，而不是套模板。
 - **音效自动跟着命中点**：入场预设自带音效；关键事件用一张时刻表，让画面与声音共用同一份时间。
 - **配乐完全由你掌控**：引擎只负责渲染，曲式/和弦/旋律/配器/音量全部由乐谱显式写出——没有风格模板、没有随机预设，同一份乐谱逐样本可复现。
-- **骨骼动画与 Spine 素材**：自研骨骼 rig（FK + PNG 部件挂骨），官方 Spine 素材（spineboy 等）node-canvas 无浏览器直渲，自绘角色也能直出 Spine 素材包再渲染。
+- **骨骼动画与 Spine 素材**：官方 Spine 素材（spineboy 等）node-canvas 无浏览器直渲（~110ms/帧@1080p）；自绘角色也能直出 Spine 素材包再渲染成片。
 - **配音与旁白一条通道**：`wv.voice.tts()` 生成或任何现成音频文件，摆放时自动去首尾静音、响度对齐，说话时配乐自动闪避。
 - **交付前自动体检**：lint（越界/阅读时间/拼写）、单帧闪烁检测（源帧 + 成片回读）、混音响度与真峰值，一次渲染全给你。
 
@@ -156,14 +156,6 @@ s.text("落版", at=q.word("视频"))              # 精确到词（词时间来
 
 ## 骨骼动画与 Spine 素材
 
-**自研骨骼 rig**（FK + 关键帧轨道 + PNG 部件挂骨，做 Q 版角色/纸片人）：
-
-```python
-from write_video.rig import Bone, Rig, Track, SpriteSkin
-rig, skin, tracks = wv.rig.load_rig("boy.rig.json")     # JSON 一体存取
-xf = rig.solve(tracks["idle"].at(t), root=(x, y))        # FK 求解 → 各骨骼世界变换
-```
-
 **官方 Spine 素材直渲**（node-canvas 无浏览器，~110ms/帧@1080p）：
 
 ```bash
@@ -172,8 +164,7 @@ ASSET_DIR=/path/to/spine-assets node spine_render.js walk '[0, 0.5, 1.0]' out
 ```
 
 自绘角色也能**直出 Spine 素材包**（PIL 画部件 + 手写 4.2 骨架 JSON，参考 `knowledge/compose.md` 的五要点），
-再用 spine-node 渲染成片。轻量场景可用 `wv.spine_io`（纯 Python 导入器）。
-详见 `knowledge/compose.md` 的「Spine 素材」与「骨骼动画」。
+再用 spine-node 渲染成片。详见 `knowledge/compose.md` 的「Spine 素材」。
 
 ## 图片卡片
 
@@ -208,7 +199,7 @@ python film.py
 - `SKILL.md` — **技能入口**（给 AI 智能体读：能力、环境、两阶段流程、自检、知识路由）
 - `knowledge/planning.md` — 策划指南（阶段 1）
 - `knowledge/compose.md` — 编排指南（阶段 2，API 速查 + 自绘菜单 + 常见坑）
-- `runtime/write_video/` — 运行时库：`film.py` 模型 / `canvas.py` 画布 / `audio.py` 音效 + 配乐渲染 + 混音 / `write_audio/` 配乐渲染模块（可替换） / `voice.py` 配音 / `render.py` 管线 / `checks.py` 闪烁检测 / `fonts.py` 字体 / `rig.py` 骨骼动画 + SpriteSkin 装配 / `spine_io.py` Spine 轻量导入 / `styles.py` 风格渲染器与后处理 / `strokes.py` 笔触图元 / `icons.py` Tabler 图标
+- `runtime/write_video/` — 运行时库：`film.py` 模型 / `canvas.py` 画布 / `audio.py` 音效 + 配乐渲染 + 混音 / `write_audio/` 配乐渲染模块（可替换） / `voice.py` 配音 / `render.py` 管线 / `checks.py` 闪烁检测 / `fonts.py` 字体 / `styles.py` 风格渲染器与后处理 / `strokes.py` 笔触图元 / `icons.py` Tabler 图标
 - `runtime/spine-node/` — Spine 官方运行时 node-canvas 直渲（无浏览器）
 - `examples/hello-world/` — 示例片
 - `assets/` — README 效果预览用素材（演示片 + logo）
