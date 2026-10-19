@@ -9,6 +9,7 @@ const { createCanvas, loadImage } = require('canvas');
 const spine = require('@esotericsoftware/spine-canvas');
 
 const ASSET_DIR = process.env.ASSET_DIR || '/workspace/spine-assets/4.2';
+const ASSET_BASE = process.env.ASSET_BASE || 'spineboy-pma';
 
 // 接缝修复：clip 抗锯齿留缝 -> 不透明三角外扩 2px；半透明三角外扩 0.5px（避免叠加变暗）
 const alphaCache = new Map();
@@ -51,9 +52,9 @@ class SeamlessRenderer extends spine.SkeletonRenderer {
 }
 
 async function createPlayer(opts) {
-    const atlasText = fs.readFileSync(path.join(ASSET_DIR, 'spineboy-pma.atlas'), 'utf-8');
-    const skeletonText = fs.readFileSync(path.join(ASSET_DIR, 'spineboy-pro.json'), 'utf-8');
-    const img = await loadImage(path.join(ASSET_DIR, 'spineboy-pma.png'));
+    const atlasText = fs.readFileSync(path.join(ASSET_DIR, ASSET_BASE + '.atlas'), 'utf-8');
+    const skeletonText = fs.readFileSync(path.join(ASSET_DIR, ASSET_BASE + '.json'), 'utf-8');
+    const img = await loadImage(path.join(ASSET_DIR, ASSET_BASE + '.png'));
 
     const atlas = new spine.TextureAtlas(atlasText);
     for (const page of atlas.pages) page.setTexture(new spine.CanvasTexture(img));
@@ -82,10 +83,14 @@ async function createPlayer(opts) {
             state.apply(skeleton);
             skeleton.updateWorldTransform(spine.Physics.update);
         },
-        draw(footYRatio = 0.9, heightRatio = 0.82, flipX = false) {
-            const scale = (H * SS * heightRatio) / skeletonData.height;
+        draw(fillRatio = 0.86, bottomRatio = 0.93, flipX = false) {
+            // 按 header 包围盒放置：世界 y=sd.y（底）落在 bottomRatio·H
+            const sd = skeletonData;
+            const scale = (H * SS * fillRatio) / sd.height;
+            const tx = W * SS / 2 - (sd.x + sd.width / 2) * scale;
+            const ty = H * SS * bottomRatio + sd.y * scale;
             ctx.save();
-            ctx.translate(W * SS / 2, H * SS * footYRatio);
+            ctx.translate(tx, ty);
             ctx.scale(flipX ? -scale : scale, -scale);
             renderer.draw(skeleton);
             ctx.restore();
@@ -106,9 +111,11 @@ async function main() {
     const p = await createPlayer({});
     p.setAnimation(animName, true);
     for (const t of times) {
+        const fr = parseFloat(process.env.FRAME_H || '0.86');
+        const br = parseFloat(process.env.FRAME_Y || '0.93');
         p.clear();
         p.seek(t);
-        p.draw();
+        p.draw(fr, br);
         fs.writeFileSync(`${outPrefix}-${animName}-${t}.png`, p.toBuffer());
         console.log('OK', `${outPrefix}-${animName}-${t}.png`);
     }
