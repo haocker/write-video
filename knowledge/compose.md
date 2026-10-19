@@ -139,6 +139,11 @@ sk.anim_time("run")                                             # 动画时长�
 
 **Spine 坑**：① 官方示例的 atlas 有 `scale: 0.5`（PNG=0.5×逻辑尺寸），attachment 的 width/height 是逻辑尺寸，sprite 按逻辑尺寸×scale 渲即可；② PMA 预乘 alpha 必须反预乘（RGB/alpha）再合成，否则半透明边缘发暗；③ mesh 附件是加权顶点（vertices 含骨骼绑定，数量 ≠ uv 数），v1 按 region 四边形渲染（图集 region 紧裁剪、透明边极小）；④ 骨骼 origin=父骨骼 origin+R(父世界角)·(x,y)（与自建 rig 的"父末端+off_w"约定不同，导入器用独立仿射 FK）；⑤ 粘贴必须按画布设备像素（cv.ss）换算，设计像素直贴会缩小一半。
 
+**满血保真正路（官方运行时）**：Python 生态无稳定 Spine 运行时，用 **spine-ts 官方运行时 + playwright 无头 chromium**（环境已预装 /root/.cache/ms-playwright/chromium-1243）：
+1. 浏览器预览：`spine-player/index.html`（widget 从 unpkg CDN 加载，本地素材经 http.server 提供）——满血渲染零安装
+2. 视频管线：`spine_to_video.py`（playwright 逐帧 seek + 截图 → ffmpeg）——widget 的 `config.app.update/render` 回调注入自己的时间控制（`entry.trackTime = __frameTime` + `state.apply(skeleton)` + `skeleton.update(0)` + `sceneRenderer.drawSkeleton`），render.html 已实现
+3. **大坑**：`player.time` 是 TimeKeeper 对象（有 .update 方法），覆盖成数字整个渲染循环崩；seek 只用 `entry.trackTime`（经 app.update 回调）；`animationState.getCurrent` 不存在（用 `expandToIndex(0)`）
+
 ### 骨骼动画（`wv.rig`）
 
 骨骼层级 + FK + 关键帧轨道，皮肤为 2.5D 图元挂骨骼（球体/胶囊/多边形）。参考实现见 `rig-demo/film.py`（Q 版角色走路/挥手/待机）。
