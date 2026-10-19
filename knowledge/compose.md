@@ -124,6 +124,21 @@ error / riser / glitch / sparkle / notification / typing / bassdrop / shutter
 - `gain` 单位 dB（-6 = 轻一半）；`dur` 覆盖时长；`pitch` 半音数。
 - 对齐手法：命中前放 `riser`（dur = 到命中的间隔），命中点放 `impact`；`at` 就是那个命中的数。
 
+### Spine 4.3 导入（`wv.spine_io`）
+
+官方 spine-runtimes 示例素材（spineboy/raptor，纯 FK 无 IK）直接可吃。参考实现见 `/workspace/spine-assets/film_spine.py`。
+
+```python
+from write_video.spine_io import SpineSkeleton
+sk = SpineSkeleton("spineboy-pro.json", "spineboy-pma.atlas")   # png 与 json 同目录自动找
+sk.draw(cv, anim="run", t=1.2, scale=0.5, cx=640, cy=640)       # scale=骨架逻辑单位→像素
+sk.anim_time("run")                                             # 动画时长（循环取模用）
+```
+
+支持：bones 完整仿射 FK（rotate/translate/scale 级联）、时间线（linear/stepped/三次贝塞尔 curve）、slots 绘制顺序与 attachment 切换、region 贴图、mesh 按紧裁剪 region 渲染、PMA 反预乘、y 翻转。
+
+**Spine 坑**：① 官方示例的 atlas 有 `scale: 0.5`（PNG=0.5×逻辑尺寸），attachment 的 width/height 是逻辑尺寸，sprite 按逻辑尺寸×scale 渲即可；② PMA 预乘 alpha 必须反预乘（RGB/alpha）再合成，否则半透明边缘发暗；③ mesh 附件是加权顶点（vertices 含骨骼绑定，数量 ≠ uv 数），v1 按 region 四边形渲染（图集 region 紧裁剪、透明边极小）；④ 骨骼 origin=父骨骼 origin+R(父世界角)·(x,y)（与自建 rig 的"父末端+off_w"约定不同，导入器用独立仿射 FK）；⑤ 粘贴必须按画布设备像素（cv.ss）换算，设计像素直贴会缩小一半。
+
 ### 骨骼动画（`wv.rig`）
 
 骨骼层级 + FK + 关键帧轨道，皮肤为 2.5D 图元挂骨骼（球体/胶囊/多边形）。参考实现见 `rig-demo/film.py`（Q 版角色走路/挥手/待机）。
