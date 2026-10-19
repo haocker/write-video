@@ -139,10 +139,13 @@ sk.anim_time("run")                                             # 动画时长�
 
 **Spine 坑**：① 官方示例的 atlas 有 `scale: 0.5`（PNG=0.5×逻辑尺寸），attachment 的 width/height 是逻辑尺寸，sprite 按逻辑尺寸×scale 渲即可；② PMA 预乘 alpha 必须反预乘（RGB/alpha）再合成，否则半透明边缘发暗；③ mesh 附件是加权顶点（vertices 含骨骼绑定，数量 ≠ uv 数），v1 按 region 四边形渲染（图集 region 紧裁剪、透明边极小）；④ 骨骼 origin=父骨骼 origin+R(父世界角)·(x,y)（与自建 rig 的"父末端+off_w"约定不同，导入器用独立仿射 FK）；⑤ 粘贴必须按画布设备像素（cv.ss）换算，设计像素直贴会缩小一半。
 
-**满血保真正路（官方运行时）**：Python 生态无稳定 Spine 运行时，用 **spine-ts 官方运行时 + playwright 无头 chromium**（环境已预装 /root/.cache/ms-playwright/chromium-1243）：
+**满血保真正路（官方运行时）**：Python 生态无稳定 Spine 运行时，用 **spine-ts 官方运行时**，两条管线：
 1. 浏览器预览：`spine-player/index.html`（widget 从 unpkg CDN 加载，本地素材经 http.server 提供）——满血渲染零安装
-2. 视频管线：`spine_to_video.py`（playwright 逐帧 seek + 截图 → ffmpeg）——widget 的 `config.app.update/render` 回调注入自己的时间控制（`entry.trackTime = __frameTime` + `state.apply(skeleton)` + `skeleton.update(0)` + `sceneRenderer.drawSkeleton`），render.html 已实现
-3. **大坑**：`player.time` 是 TimeKeeper 对象（有 .update 方法），覆盖成数字整个渲染循环崩；seek 只用 `entry.trackTime`（经 app.update 回调）；`animationState.getCurrent` 不存在（用 `expandToIndex(0)`）
+2. 视频管线（浏览器）：`spine_to_video.py`（playwright 逐帧 seek + 截图 → ffmpeg）——widget 的 `config.app.update/render` 回调注入自己的时间控制（`entry.trackTime = __frameTime` + `state.apply(skeleton)` + `skeleton.update(0)` + `sceneRenderer.drawSkeleton`），render.html 已实现
+3. **视频管线（node-canvas 直渲，无浏览器，推荐）**：`runtime/spine-node/spine_render.js`（spine-canvas 4.2.119 + node-canvas 3）——`createPlayer()` 返回 setAnimation/seek/draw/toBuffer，~110ms/帧@1080p。**四坑**：① `state.setAnimation(track, name, loop)` 只收**名字字符串**，传 Animation 对象报 "Animation not found: [object Object]"；② spine-canvas 4.2 的 `skeleton.update(delta)` 只做 `time+=delta`，**必须显式 `skeleton.updateWorldTransform(spine.Physics.update)`**，否则世界矩阵全零渲染全透明；③ `TextureAtlas(atlasText)` 构造只解析结构，纹理要手动 `page.setTexture(new CanvasTexture(img))`；④ 渲染用 `SkeletonRenderer`（无 SceneRenderer），`triangleRendering=true` 才画 mesh（默认 drawImages 只画 region）
+4. **三角接缝**（canvas 2D clip 抗锯齿留缝）：子类覆写 `drawTriangle` 顶点沿质心外扩；**按纹理 alpha 自适应**——不透明三角外扩 2px（闭合缝隙，重叠不可见），半透明三角外扩 0.5px（外扩大会叠加变暗出黑线）；UV 顶点采样判透明
+5. **版本配套**：运行时与数据版本严格同 minor（4.2.119 运行时配 4.2.22 数据 ✓；3.8/4.0 数据不通用）；素材在 `/workspace/spine-assets/4.2/`（spineboy-pro.json + spineboy-pma.atlas/png）
+6. **大坑**（浏览器管线）：`player.time` 是 TimeKeeper 对象（有 .update 方法），覆盖成数字整个渲染循环崩；seek 只用 `entry.trackTime`（经 app.update 回调）；`animationState.getCurrent` 不存在（用 `expandToIndex(0)`）
 
 ### 骨骼动画（`wv.rig`）
 

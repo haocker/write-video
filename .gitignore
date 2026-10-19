@@ -16,3 +16,4 @@ check/
 # README 效果预览素材例外
 !assets/*.mp4
 !assets/*.png
+node_modules/
