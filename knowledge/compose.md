@@ -124,29 +124,6 @@ error / riser / glitch / sparkle / notification / typing / bassdrop / shutter
 - `gain` 单位 dB（-6 = 轻一半）；`dur` 覆盖时长；`pitch` 半音数。
 - 对齐手法：命中前放 `riser`（dur = 到命中的间隔），命中点放 `impact`；`at` 就是那个命中的数。
 
-### Spine 素材（官方运行时）
-
-两条管线，按需选：
-
-**① node-canvas 直渲（推荐，无浏览器）**：`runtime/spine-node/spine_render.js`（spine-canvas 4.2.119 + node-canvas 3，`npm install` 装依赖）——`createPlayer()` 返回 setAnimation/seek/draw/toBuffer，~110ms/帧@1080p，ffmpeg 合 MP4。四坑：
-- `state.setAnimation(track, name, loop)` 只收**名字字符串**，传 Animation 对象报 "Animation not found: [object Object]"
-- spine-canvas 4.2 的 `skeleton.update(delta)` 只做 `time+=delta`，**必须显式 `skeleton.updateWorldTransform(spine.Physics.update)`**，否则世界矩阵全零渲染全透明
-- `TextureAtlas(atlasText)` 构造只解析结构，纹理要手动 `page.setTexture(new CanvasTexture(img))`
-- 渲染用 `SkeletonRenderer`（无 SceneRenderer），`triangleRendering=true` 才画 mesh（默认 drawImages 只画 region）
-
-**三角接缝**（canvas 2D clip 抗锯齿留缝）：子类覆写 `drawTriangle`，顶点沿质心外扩——按纹理 alpha 自适应：不透明三角外扩 2px（闭合缝隙，重叠不可见），半透明三角外扩 0.5px（外扩大会叠加变暗出黑线）。
-
-**自绘角色直出 Spine 素材**（参考 `/workspace/mychar-spine/gen_astro.py`，原创小宇航员 idle/walk/run 实证成片）：PIL 画部件（直立图、proximal 在上、厚描边卡通风）→ 网格打包 atlas → 手写 4.2 骨架 JSON（bones/slots/skins/animations，纯 FK）。五要点：
-- 4.2 的 rotate 时间线值键名是 **"value"**（3.8 的 "angle" 会静默解析成 0，动画不生效）
-- translate 的 curve 是 **X/Y 双通道 8 值**（`[cx1,cy1,cx2,cy2]`×2，只写 4 值则 Y 通道读到 undefined 变 NaN，骨骼世界坐标全 NaN 渲染全透明）
-- 附件 rotation = **-骨骼世界角**（直立部件图），att x = 骨长/2
-- atlas 必须官方 4.2 格式：**TAB 缩进 + region 单行 `bounds:` + 无空行**（空行会分出新 page 导致 0 region）
-- 肢体图两端用**近平头（小圆角）并延长越过关节 ~10 单位**（圆角封口+描边会造成关节视觉断裂）；skeleton header 的 x/y/width/height 填**真实内容包围盒**（root 在髋部时腿在负 y 区）
-
-**② 浏览器满血渲染**：`spine-player/index.html`（widget 从 unpkg CDN 加载，本地素材经 http.server 提供）；视频管线 `spine_to_video.py`（playwright 逐帧 seek + 截图 → ffmpeg），`config.app.update/render` 回调注入时间控制。大坑：`player.time` 是 TimeKeeper 对象，覆盖成数字整个渲染循环崩；seek 只用 `entry.trackTime`；`getCurrent` 不存在（用 `expandToIndex(0)`）。
-
-**版本配套**：运行时与数据版本严格同 minor（4.2.119 配 4.2.22 ✓；3.8/4.0 数据不通用）。node 端 4.3 无稳定包（用浏览器管线）；官方 spine-runtimes 3.8 分支素材在 `export/` 子目录。
-
 ### 配乐（只渲染，不含模板）
 
 配乐**没有风格模板**——引擎只做渲染，编曲由你（AI）自己写。用 `wv.wa` 构造一份乐谱，赋给 `film.music`：
