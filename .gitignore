@@ -1,0 +1,19 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+
+# 渲染产物
+artifacts/
+check/
+*.mp4
+*.sheet.png
+*.report.txt
+*.flicker.png
+
+# README 效果预览素材例外
+!assets/*.mp4
+!assets/*.png
+node_modules/

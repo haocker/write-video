@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "write-video"
+version = "0.4.0"
+description = "用代码编排短视频/MP4：策划分镜 → 写 Python 影片脚本 → 渲染带配乐与音效的成片"
+readme = "README.md"
+requires-python = ">=3.8"
+license = { text = "MIT" }
+authors = [{ name = "write-video contributors" }]
+keywords = ["video", "code-to-video", "ffmpeg", "pillow", "animation", "motion-graphics", "coding-film", "music"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Topic :: Multimedia :: Video",
+    "Topic :: Multimedia :: Video :: Non-Linear Editor",
+]
+dependencies = [
+    "pillow>=8.0",
+    "numpy>=1.16",
+]
+
+[project.optional-dependencies]
+voice = ["edge-tts>=7.0"]
+
+[project.urls]
+Homepage = "https://github.com/haocker/write-video"
+Repository = "https://github.com/haocker/write-video"
+Issues = "https://github.com/haocker/write-video/issues"
+
+[tool.setuptools]
+package-dir = { "" = "runtime" }
+
+[tool.setuptools.packages.find]
+where = ["runtime"]
