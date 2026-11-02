@@ -1,4 +1,4 @@
-# 风格配方卡总索引（51 张，重复 4 对已融合）
+# 风格配方卡总索引（53 张，重复 4 对已融合）
 
 > **先读这一句**：35 张人像风格样片是同一个构图（风格在变、场景不变），做新题材要为题材重新构图——卡里的渲染器、笔法、色彩逻辑、母题动法可以拿走，坐标、角色、家具不要搬过去。实用风格卡同理：手法与编排可拿走，3D 依赖的部分标注了可移植性。
 
@@ -69,6 +69,8 @@
 | editorial | 数据新闻编辑风 | Canvas 2D | 已移植（样片 examples/style-ports/editorial/film.py）| 图元直绘＋texture 纸纹；CJK 逐字断行需自实现 |
 | clay | 黏土定格 | 光线步进 | 不可移植 | 12fps frameKey/boil/挤压拉伸曲线可移植 2D |
 | blueprint | 蓝图工程图 | 光线步进 | 已移植·降级（raymarch 换 2.5D 假投影，样片 examples/style-ports/blueprint/film.py）| 2D 标注层（尺寸线/引线/标题栏）直接移植 |
+| doodle-explain | 简笔画解说（PPT 式图解） | Canvas 2D | 直接可写（框架卡；样片 examples/style-ports/doodle-explain/film.py 46s 五页）| 图元直绘＋手写字；笔画生长按弧长截断，抖动按固定节拍重掷 |
+| stickfigure | 火柴人动画（叙事短片） | Canvas 2D | 直接可写（框架卡；样片 examples/style-ports/stickfigure/film.py 30s 三幕）| 骨架摆姿＋整幅变换＋痕迹层；两段四肢与接触帧是硬约束 |
 
 ## 转场
 
@@ -78,4 +80,4 @@
 
 - ★★★ 20 种、★★ 14 种、★ 1 种（人像风格侧）。
 - **最普遍的短板是角色**：背景过了风格渲染器就像那个风格，角色只用矢量骨架平涂就像贴上去的。下一轮提质先从「角色也过同一个渲染器／按该风格重塑造型」做起。
-- **风格库 实用风格 16/16 全部落位（2026-10）**：handdrawn（2.5D 解析投影版）+ 11 张样片移植于 `examples/style-ports/`（flat-zoom/lineart/morph/sticker/hud/editorial 直出；collage/glass/variety/pagecam/blueprint 降级近似），isometric 双样片；台账与共性坑见 `examples/style-ports/README.md`。3d-render/liquid/clay 永久不移植（3D 依赖）。人像风格侧渲染器齐装；玻璃 SDF 折射/kirby clip evenodd 依赖 WebGL 基建，维持降级近似。
+- **风格库 实用风格 18/18 全部落位（2026-11）**：handdrawn（2.5D 解析投影版）+ 11 张样片移植于 `examples/style-ports/`（flat-zoom/lineart/morph/sticker/hud/editorial 直出；collage/glass/variety/pagecam/blueprint 降级近似），isometric 双样片；台账与共性坑见 `examples/style-ports/README.md`。另有 2 张框架卡（doodle-explain 简笔画解说、stickfigure 火柴人叙事，只给结构与空槽）。3d-render/liquid/clay 永久不移植（3D 依赖）。人像风格侧渲染器齐装；玻璃 SDF 折射/kirby clip evenodd 依赖 WebGL 基建，维持降级近似。

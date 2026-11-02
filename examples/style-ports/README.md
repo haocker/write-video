@@ -26,3 +26,10 @@
 - 多 Canvas 实例必须各自 flush；帧内建 Canvas 会清共享 skia scratch（先预热 sprite）
 - 有意急变（穿屏/glitch/定格跳动）用 `flicker_exclude(t0, t1)` 声明
 - 快速运镜贴高对比文字边缘会触发闪烁误报，连帧对差核实后保留并注明
+
+## 框架卡样片（独立于 16 张风格卡）
+
+| 卡 | 样片 | 要点 |
+|---|---|---|
+| doodle-explain | `doodle-explain/film.py`（《简笔画蒙娜丽莎》46s 五页） | 先画后说；笔画按弧长生长；抖动按固定节拍重掷；换页显式（整页上移或溶解）；半透明笔画先与纸色预混合再画 |
+| stickfigure | `stickfigure/film.py`（《最后一格》30s 三幕） | 骨架摆姿＋整幅变换＋痕迹层；两段四肢；接触帧对齐 |
